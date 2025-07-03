@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Encuesta CABA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="nav">
+    <h1>Iniciar Sesión</h1>
+  </div>
+  <div id="content">
+    <label>Email:</label><br />
+    <input type="email" id="email" /><br />
+    <label>Contraseña:</label><br />
+    <input type="password" id="password" /><br />
+    <button id="loginBtn">Ingresar</button>
+    <button id="googleBtn">Ingresar con Google</button>
+    <p id="error" style="color:red;"></p>
+  </div>
+
+  <script type="module">
+    import './auth.js';
+    import { login, loginConGoogle, usuarioActual } from './auth.js';
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      try {
+        await login(email, password);
+        window.location.href = 'encuestas.html';
+      } catch (err) {
+        document.getElementById('error').textContent = err.message;
+      }
+    });
+
+    document.getElementById('googleBtn').addEventListener('click', async () => {
+      try {
+        await loginConGoogle();
+        window.location.href = 'encuestas.html';
+      } catch (err) {
+        document.getElementById('error').textContent = err.message;
+      }
+    });
+
+    usuarioActual(user => {
+      if (user) window.location.href = 'encuestas.html';
+    });
+  </script>
+</body>
+</html>
