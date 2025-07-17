@@ -10,12 +10,12 @@ import {
 
 // Configuración de Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyDrbPpE1hkNk5T1zdvLnqkJ_zTBgDjL3lI",
-  authDomain: "encuestacaba-e35e5.firebaseapp.com",
-  projectId: "encuestacaba-e35e5",
-  storageBucket: "encuestacaba-e35e5.firebasestorage.app",
-  messagingSenderId: "57347474602",
-  appId: "1:57347474602:web:b90b9d53add88b8185bcd3"
+apiKey: "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do",
+  authDomain: "encuestacabajuan.firebaseapp.com",
+  projectId: "encuestacabajuan",
+  storageBucket: "encuestacabajuan.firebasestorage.app",
+  messagingSenderId: "534439491127",
+  appId: "1:534439491127:web:41fbee0ad78c89d692b1b2"
 };
 
 // Inicializar Firebase y Auth
@@ -49,4 +49,21 @@ export function usuarioActual(callback) {
     callback(user);
   });
 }
+
+
+import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+export const dbFirestore = getFirestore(app);
+
+export async function guardarComentarioFirestore(comentario) {
+await addDoc(collection(dbFirestore, "comentarios"), comentario);
+}
+
+
+
+import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+
+export const messaging = getMessaging(app);
+
+
 

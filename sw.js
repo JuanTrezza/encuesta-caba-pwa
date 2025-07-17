@@ -21,8 +21,6 @@ const FILES_TO_CACHE = [
   "/assets/categorias/accesibilidad.jpg"
 ];
 
-
-
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(FILES_TO_CACHE))
@@ -32,7 +30,21 @@ self.addEventListener("install", event => {
 self.addEventListener("fetch", event => {
   event.respondWith(
     caches.match(event.request).then(response => {
-      return response || fetch(event.request);
+      if (response) {
+        return response;
+      }
+      // Si no está en cache, intenta fetch y maneja errores de red.
+      return fetch(event.request).catch(err => {
+        // Opcional: podés retornar una respuesta personalizada si querés.
+        // Por ejemplo, una página offline:
+        // return caches.match('/offline.html');
+        // O simplemente:
+        return new Response("Recurso no disponible.", {
+          status: 404,
+          statusText: "Not Found"
+        });
+      });
     })
   );
 });
+
