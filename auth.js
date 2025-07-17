@@ -39,6 +39,7 @@ export function cerrarSesion() {
   return signOut(auth);
 }
 
+// Verifica si hay un usuario autenticado
 export function usuarioActual(callback) {
   auth.onAuthStateChanged(user => {
     if (user) {

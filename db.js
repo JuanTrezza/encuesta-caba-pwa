@@ -1,5 +1,5 @@
 let db;
-
+// db.js - Manejo de IndexedDB para comentarios y pendientes
 export function inicializarDB() {
   const request = indexedDB.open("EncuestasCABA", 2);
   request.onupgradeneeded = e => {
@@ -13,7 +13,7 @@ export function inicializarDB() {
   };
   request.onsuccess = e => { db = e.target.result; };
 }
-
+//Guardador de comentarios y pendientes
 export function guardarComentario(categoria, comentario) {
   return new Promise(resolve => {
     const tx = db.transaction("comentarios", "readwrite");
@@ -22,7 +22,7 @@ export function guardarComentario(categoria, comentario) {
     tx.oncomplete = resolve;
   });
 }
-
+// Trae los comentarios de una categoría específica
 export function traerComentarios(categoria) {
   return new Promise(resolve => {
     const tx = db.transaction("comentarios", "readonly");
@@ -34,6 +34,7 @@ export function traerComentarios(categoria) {
   });
 }
 
+// Guarda un comentario pendiente para enviar más tarde
 export function guardarPendiente(categoria, comentario) {
   return new Promise(resolve => {
     const tx = db.transaction("pendientes", "readwrite");
@@ -43,6 +44,7 @@ export function guardarPendiente(categoria, comentario) {
   });
 }
 
+// Trae los comentarios pendientes
 export function traerPendientes() {
   return new Promise(resolve => {
     const tx = db.transaction("pendientes", "readonly");
@@ -52,6 +54,7 @@ export function traerPendientes() {
   });
 }
 
+// Elimina un comentario pendiente
 export function eliminarPendiente(id) {
   return new Promise(resolve => {
     const tx = db.transaction("pendientes", "readwrite");
