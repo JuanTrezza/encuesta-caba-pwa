@@ -133,11 +133,23 @@ async function solicitarPermisoNotificaciones() {
 }
 
 // Muestra la notificación si la app está abierta (primer plano)
+// Muestra la notificación si la app está abierta (primer plano)
 onMessage(messaging, (payload) => {
   console.log('Mensaje recibido en primer plano:', payload);
+  alert("FCM recibido (test)."); // Para confirmar si entra
   if (Notification.permission === 'granted') {
-    const { title, body } = payload.notification;
-    new Notification(title, { body, icon: '/assets/icon.png' });
+    navigator.serviceWorker.getRegistration().then(registration => {
+      if (registration) {
+        registration.showNotification("Test Notificación", {
+          body: "Notificación mostrada por Service Worker.",
+          icon: "icon.png"
+        });
+      } else {
+        alert("No hay Service Worker registrado.");
+      }
+    });
+  } else {
+    alert("No hay permiso de notificaciones.");
   }
 });
 
