@@ -1,0 +1,7 @@
+# Ignore local config files that contain API keys / secrets
+config.js
+sw-config.js
+
+# Node / IDE cruft (if needed later)
+node_modules/
+.vscode/
