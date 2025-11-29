@@ -1,13 +1,25 @@
-// Example for service worker config. Copy to `sw-config.js` and fill values.
-// This file is a plain script (not an ES module) so it can be loaded with importScripts().
+// INSTRUCCIONES:
+// 1. Copia este archivo como: sw-config.js
+// 2. Reemplaza los valores XXXXXXX con tus credenciales reales de Firebase
+// 3. NO subas sw-config.js a GitHub (ya está en .gitignore)
+
+// Configuración para Service Worker (debe ser un script plano, no ES module)
 var swFirebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto-id",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "XXXXXXXXXXXX",
+  appId: "X:XXXXXXXXXXXX:web:XXXXXXXXXXXXXXXXXXXXXXXX"
 };
 
-// After copying to `sw-config.js`, ensure `importScripts('./sw-config.js');` is called
-// before firebase.initializeApp(swFirebaseConfig) inside `firebase-messaging-sw.js`.
+// Inicializar Firebase en el service worker
+try {
+  firebase.initializeApp(swFirebaseConfig);
+} catch (e) {
+  // Si ya está inicializado, ignorar
+  console.warn('Firebase ya inicializado en service worker');
+}
+
+// Para obtener estas credenciales:
+// Ve a Firebase Console → Tu proyecto → Configuración → SDK setup

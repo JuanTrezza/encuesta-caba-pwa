@@ -1,13 +1,20 @@
-// Copy this file to `config.js` (do NOT commit `config.js`) and fill with real values.
+// INSTRUCCIONES:
+// 1. Copia este archivo como: config.js
+// 2. Reemplaza los valores XXXXXXX con tus credenciales reales de Firebase
+// 3. NO subas config.js a GitHub (ya está en .gitignore)
+
 export const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto-id",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "XXXXXXXXXXXX",
+  appId: "X:XXXXXXXXXXXX:web:XXXXXXXXXXXXXXXXXXXXXXXX"
 };
 
-// Notes:
-// - `config.js` should export `firebaseConfig` (ES module) so `auth.js` can import it.
-// - Keep `config.js` out of source control (add it to .gitignore).
+// Para obtener estas credenciales:
+// 1. Ve a Firebase Console: https://console.firebase.google.com/
+// 2. Selecciona tu proyecto
+// 3. Ve a Configuración del proyecto (ícono de engranaje)
+// 4. En "Tus apps" → "SDK setup and configuration"
+// 5. Copia los valores del objeto firebaseConfig

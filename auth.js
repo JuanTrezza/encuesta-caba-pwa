@@ -8,21 +8,9 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// ⚠️ NOTA DE SEGURIDAD: Esta configuración de Firebase es PÚBLICA INTENCIONALMENTE
-// Las API Keys de Firebase para web son seguras cuando se configuran correctamente:
-// 1. Restricciones de HTTP referrers en Google Cloud Console
-// 2. Reglas de seguridad en Firestore (solo autenticados pueden escribir)
-// 3. Firebase está diseñado para que estas claves sean públicas en aplicaciones web
-// Ref: https://firebase.google.com/docs/projects/api-keys
-// Esta es una Progressive Web App pública - la seguridad está en las reglas de Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do", // Public API key - Safe for client-side use
-  authDomain: "encuestacabajuan.firebaseapp.com",
-  projectId: "encuestacabajuan",
-  storageBucket: "encuestacabajuan.firebasestorage.app",
-  messagingSenderId: "534439491127",
-  appId: "1:534439491127:web:41fbee0ad78c89d692b1b2"
-};
+// Configuración de Firebase cargada desde archivo externo (NO VERSIONADO)
+// Crea el archivo config.js copiando config.example.js y completando tus valores
+import { firebaseConfig } from './config.js';
 
 // Inicializar Firebase y Auth
 const app = initializeApp(firebaseConfig);

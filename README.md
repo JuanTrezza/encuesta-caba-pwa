@@ -69,27 +69,31 @@ http://localhost:8000
 
 ## 🔒 Seguridad
 
-Esta es una **aplicación pública** diseñada para ser usada por cualquier persona. La seguridad está garantizada mediante:
+Esta aplicación utiliza **configuración externa** para mantener las credenciales de Firebase seguras:
 
+✅ **Archivos de configuración NO versionados** (config.js, sw-config.js en .gitignore)  
 ✅ **Restricciones de API Key** (HTTP referrers en Google Cloud)  
 ✅ **Reglas de Firestore** (lectura pública, escritura solo autenticados)  
 ✅ **Validación de datos** (límite de caracteres, rango de calificaciones)  
 ✅ **Sin edición/eliminación** de comentarios (previene vandalismo)
 
-### ⚠️ Sobre las API Keys de Firebase
+### 🔧 Configuración Inicial
 
-**Las claves de Firebase están en el código INTENCIONALMENTE** - esto es **seguro y es el diseño oficial de Firebase para aplicaciones web**.
+Para usar esta aplicación localmente:
 
-Según la [documentación oficial de Firebase](https://firebase.google.com/docs/projects/api-keys):
+1. **Copia los archivos de ejemplo:**
+   ```bash
+   cp config.example.js config.js
+   cp sw-config.example.js sw-config.js
+   ```
 
-> "Unlike how API keys are typically used, API keys for Firebase services are not used to control access to backend resources."
+2. **Edita los archivos** y completa con tus credenciales de Firebase:
+   - Obtén las credenciales en [Firebase Console](https://console.firebase.google.com/)
+   - Proyecto → Configuración → SDK setup
 
-**La seguridad NO está en ocultar la API key, sino en:**
-- Restricciones de HTTP referrers (solo dominios autorizados)
-- Reglas de seguridad de Firestore (server-side)
-- Autenticación requerida para operaciones críticas
+3. **NO subas** `config.js` ni `sw-config.js` a GitHub (ya están en .gitignore)
 
-Ver [SECURITY.md](./SECURITY.md) para detalles completos sobre el modelo de seguridad.
+Ver [SECURITY_SETUP.md](./SECURITY_SETUP.md) para configurar las restricciones de seguridad.
 
 ---
 
