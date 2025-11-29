@@ -1,0 +1,33 @@
+# Configuración de GitLeaks para ignorar false positives
+# Este proyecto usa Firebase con API keys públicas INTENCIONALMENTE (diseño de Firebase para web)
+
+title = "gitleaks config for encuesta-caba-pwa"
+
+# Reglas para ignorar Firebase API keys (son públicas por diseño)
+[[rules]]
+id = "firebase-api-key-allowed"
+description = "Firebase API keys are public by design for web apps"
+regex = '''AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do'''
+tags = ["firebase", "public-key"]
+
+[[rules.allowlist]]
+description = "Firebase web API keys en archivos autorizados"
+paths = [
+  '''auth\.js''',
+  '''firebase-messaging-sw\.js''',
+  '''config\.example\.js''',
+  '''sw-config\.example\.js'''
+]
+
+# Ignorar commits específicos si es necesario
+[allowlist]
+commits = []
+paths = [
+  '''SECURITY\.md''',
+  '''README\.md''',
+  '''SECURITY_SETUP\.md'''
+]
+regexes = [
+  '''Public API key - Safe for client-side use''',
+  '''gitleaks:allow'''
+]
