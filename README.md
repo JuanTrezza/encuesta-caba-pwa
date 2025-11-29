@@ -76,9 +76,20 @@ Esta es una **aplicación pública** diseñada para ser usada por cualquier pers
 ✅ **Validación de datos** (límite de caracteres, rango de calificaciones)  
 ✅ **Sin edición/eliminación** de comentarios (previene vandalismo)
 
-Las claves de Firebase están en el código **intencionalmente** - esto es seguro para PWAs públicas cuando se implementan las restricciones correctas.
+### ⚠️ Sobre las API Keys de Firebase
 
-Ver [SECURITY_SETUP.md](./SECURITY_SETUP.md) para detalles.
+**Las claves de Firebase están en el código INTENCIONALMENTE** - esto es **seguro y es el diseño oficial de Firebase para aplicaciones web**.
+
+Según la [documentación oficial de Firebase](https://firebase.google.com/docs/projects/api-keys):
+
+> "Unlike how API keys are typically used, API keys for Firebase services are not used to control access to backend resources."
+
+**La seguridad NO está en ocultar la API key, sino en:**
+- Restricciones de HTTP referrers (solo dominios autorizados)
+- Reglas de seguridad de Firestore (server-side)
+- Autenticación requerida para operaciones críticas
+
+Ver [SECURITY.md](./SECURITY.md) para detalles completos sobre el modelo de seguridad.
 
 ---
 
