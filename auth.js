@@ -8,9 +8,15 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// Configuración de Firebase (público - seguridad manejada por reglas de Firebase)
+// ⚠️ NOTA DE SEGURIDAD: Esta configuración de Firebase es PÚBLICA INTENCIONALMENTE
+// Las API Keys de Firebase para web son seguras cuando se configuran correctamente:
+// 1. Restricciones de HTTP referrers en Google Cloud Console
+// 2. Reglas de seguridad en Firestore (solo autenticados pueden escribir)
+// 3. Firebase está diseñado para que estas claves sean públicas en aplicaciones web
+// Ref: https://firebase.google.com/docs/projects/api-keys
+// Esta es una Progressive Web App pública - la seguridad está en las reglas de Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do",
+  apiKey: "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do", // Public API key - Safe for client-side use
   authDomain: "encuestacabajuan.firebaseapp.com",
   projectId: "encuestacabajuan",
   storageBucket: "encuestacabajuan.firebasestorage.app",

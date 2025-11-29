@@ -1,0 +1,8 @@
+# Configuración de Dependabot para el proyecto
+version: 2
+updates:
+  # No monitorear secretos en archivos públicos intencionalmente
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
