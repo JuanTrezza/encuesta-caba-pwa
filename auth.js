@@ -8,9 +8,15 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// Firebase config is loaded from a non-versioned file `config.js`.
-// Create `config.js` from `config.example.js` and fill your real values.
-import { firebaseConfig } from './config.js';
+// Configuración de Firebase (público - seguridad manejada por reglas de Firebase)
+const firebaseConfig = {
+  apiKey: "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do",
+  authDomain: "encuestacabajuan.firebaseapp.com",
+  projectId: "encuestacabajuan",
+  storageBucket: "encuestacabajuan.firebasestorage.app",
+  messagingSenderId: "534439491127",
+  appId: "1:534439491127:web:41fbee0ad78c89d692b1b2"
+};
 
 // Inicializar Firebase y Auth
 const app = initializeApp(firebaseConfig);
