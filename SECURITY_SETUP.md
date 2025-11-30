@@ -11,7 +11,7 @@
 
 ### Paso 2: Ir a Credenciales
 1. En el menú lateral, navega a: **APIs & Services** → **Credentials**
-2. Busca la API Key: `AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do`
+2. Busca tu API Key de Firebase (Browser key o Web API key)
 3. Haz clic en el ícono de **editar** (lápiz) junto a la key
 
 ### Paso 3: Restricciones de Aplicación

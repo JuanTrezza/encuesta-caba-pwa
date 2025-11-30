@@ -106,7 +106,7 @@ Verifica que:
 ⚠️ **SOLO después de confirmar que la nueva key funciona:**
 
 1. Ve a: [Google Cloud Credentials](https://console.cloud.google.com/apis/credentials)
-2. Busca la key antigua: `AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do`
+2. Busca tu key antigua de Firebase (la que fue expuesta)
 3. Haz clic en el ícono de **basura** (🗑️)
 4. Confirma la eliminación
 
@@ -125,7 +125,7 @@ La key antigua todavía existe en el historial de commits. Para eliminarla compl
 # Descargar BFG: https://rtyley.github.io/bfg-repo-cleaner/
 
 # Crear archivo con la key a eliminar
-echo "AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do" > passwords.txt
+echo "TU_API_KEY_ANTIGUA_AQUI" > passwords.txt
 
 # Ejecutar BFG
 java -jar bfg.jar --replace-text passwords.txt encuesta-caba-pwa.git

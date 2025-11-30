@@ -4,10 +4,8 @@
 title = "gitleaks config for encuesta-caba-pwa"
 
 # Reglas para ignorar Firebase API keys (son públicas por diseño)
-[[rules]]
-id = "firebase-api-key-allowed"
-description = "Firebase API keys are public by design for web apps"
-regex = '''AIzaSyCEv6nDnAbN2WAgQ2aaS7V70RLgzq905do'''
+# Firebase API keys configuration removed
+# This file can be deleted or reconfigured if needed
 tags = ["firebase", "public-key"]
 
 [[rules.allowlist]]
