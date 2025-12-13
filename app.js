@@ -90,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     // SW normal de la app
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('./sw.js')
       .then(reg => {
         console.log('✅ Service Worker registrado:', reg.scope);
       })
@@ -99,7 +99,7 @@ if ('serviceWorker' in navigator) {
       });
 
     // SW de Firebase Messaging
-    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+    navigator.serviceWorker.register('./firebase-messaging-sw.js')
       .then(reg => {
         console.log('✅ Firebase Messaging SW registrado:', reg.scope);
       })
