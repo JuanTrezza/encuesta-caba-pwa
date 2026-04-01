@@ -206,8 +206,7 @@ Este proyecto es de código abierto y está disponible bajo la licencia MIT.
 **Juan Trezza**
 
 - GitHub: [@JuanTrezza](https://github.com/JuanTrezza)
-- LinkedIn: [Tu perfil de LinkedIn]
-
+- LinkedIn: www.linkedin.com/in/juanmorenotrezza
 ---
 
 ## 🐛 Reporte de Bugs
