@@ -1,226 +1,75 @@
-# 📊 Encuesta CABA - PWA
+# Voz Porteña
 
-**Progressive Web App** para recopilar opiniones sobre servicios de la Ciudad de Buenos Aires.
+Sitio para puntuar y comentar cómo funciona la vida cotidiana en los 48 barrios de Buenos Aires: limpieza, transporte, espacios verdes, eventos gratuitos, subte, seguridad y accesibilidad.
 
-[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://juantrezza.github.io/encuesta-caba-pwa/)
-[![Firebase](https://img.shields.io/badge/Firebase-10.12.0-orange)](https://firebase.google.com/)
-[![PWA](https://img.shields.io/badge/PWA-enabled-blue)](https://web.dev/progressive-web-apps/)
+Proyecto independiente, sin relación con el Gobierno de la Ciudad de Buenos Aires.
 
----
+**Demo:** https://juantrezza.github.io/encuesta-caba-pwa/
 
-## 🚀 Demo en Vivo
+## Stack
 
-**👉 [Ver aplicación](https://juantrezza.github.io/encuesta-caba-pwa/)**
+Vite, React 19, TypeScript strict, Tailwind CSS v3, React Router con `HashRouter`, Firebase JS SDK v11 (Auth y Firestore) y Playwright. Se publica en GitHub Pages con GitHub Actions.
 
-La aplicación está desplegada en GitHub Pages y es **100% funcional** sin necesidad de configuración.
+## Desarrollo
 
----
-
-## ✨ Características
-
-- 📱 **Progressive Web App** - Instalable en dispositivos móviles
-- 🔐 **Autenticación** - Login con Google o Email/Password
-- 💾 **Offline First** - Funciona sin conexión (IndexedDB + Service Worker)
-- 🔔 **Notificaciones Push** - Firebase Cloud Messaging
-- 📊 **7 Categorías de Evaluación**:
-  - Limpieza
-  - Transporte
-  - Espacios Verdes
-  - Eventos Gratuitos
-  - Subte
-  - Seguridad
-  - Accesibilidad
-
----
-
-## 🛠️ Tecnologías
-
-- **Frontend**: HTML5, CSS3, JavaScript (ES6 Modules)
-- **Backend**: Firebase (Firestore, Auth, Messaging)
-- **Storage**: IndexedDB (local) + Firestore (cloud)
-- **PWA**: Service Workers, Web App Manifest
-- **Hosting**: GitHub Pages
-
----
-
-## 📦 Instalación Local
-
-1. **Clonar el repositorio**
 ```bash
-git clone https://github.com/JuanTrezza/encuesta-caba-pwa.git
-cd encuesta-caba-pwa
+npm ci
+cp .env.example .env.local   # y completá los valores
+npm run dev
 ```
 
-2. **Servir localmente**
+La app corre en `http://localhost:5173/encuesta-caba-pwa/`.
+
+| Comando | Qué hace |
+|---|---|
+| `npm run typecheck` | Corre `tsc` |
+| `npm run build` | Corre `tsc` y genera `dist/` |
+| `npm run test:e2e` | Corre Playwright en 375 y 1440 px, con los services mockeados |
+| `npm run test:rules` | Prueba las reglas de Firestore en el emulador. Requiere Java 21 o superior |
+
+Los tests no tocan Firebase: con `--mode e2e`, Vite reemplaza `src/services/auth.ts` y `src/services/comentarios.ts` por `tests/mocks/`. Las capturas quedan en `screenshots/`, que no se versiona. Si es la primera vez, instalá el navegador con `npx playwright install chromium`.
+
+## Seguridad
+
+### Por qué la apiKey web no es secreta
+
+La `apiKey` de la config web de Firebase identifica al proyecto, pero no da acceso a los datos. Tiene que llegar al navegador para que la app funcione, así que cualquiera puede leerla en el JavaScript publicado. Guardarla en `.env.local` y en los secrets de GitHub evita tenerla en el repo, pero no la oculta.
+
+No pasa lo mismo con las credenciales de servidor, como una service account, su `private_key`, un token de la CLI de Firebase o la server key de FCM. Esas dan acceso real: nunca van en este repo ni en una variable `VITE_*`, porque todo lo que empieza con `VITE_` termina en el bundle público.
+
+### Qué protege los datos
+
+| Capa | Qué hace | Dónde se configura |
+|---|---|---|
+| Reglas de Firestore | Deciden quién puede leer o escribir y validan cada documento. Son la protección principal. | Firestore → Rules |
+| Restricción por dominio | Limita desde qué sitios se acepta la key. | Google Cloud → Credentials → Application restrictions |
+| Restricción por API | Limita qué APIs de Google se pueden llamar con la key. | Google Cloud → Credentials → API restrictions |
+| Dominios autorizados | Limita en qué dominios funciona el login. | Authentication → Settings → Authorized domains |
+| App Check | Ayuda a comprobar que los pedidos vienen de esta app. Reduce el abuso automatizado, pero no reemplaza a las reglas. | App Check |
+
+La restricción por dominio se basa en el encabezado `Referer`, que un cliente fuera del navegador puede falsificar. Por eso las reglas tienen que alcanzar por sí solas para proteger los datos.
+
+### App Check
+
+Se activa solo si existe `VITE_FIREBASE_APPCHECK_SITE_KEY`, la site key de reCAPTCHA v3. Sin esa variable, la app funciona igual y no carga reCAPTCHA. Los pasos para activarlo están en [docs/firebase-setup.md](docs/firebase-setup.md).
+
+### Probar las reglas
+
+Las reglas están en [firestore.rules](firestore.rules) y los índices en [firestore.indexes.json](firestore.indexes.json).
+
 ```bash
-# Con Python
-python -m http.server 8000
-
-# O con Node.js
-npx http-server -p 8000
+winget install EclipseAdoptium.Temurin.21.JDK   # solo la primera vez; después abrí otra terminal
+npm run test:rules
 ```
 
-3. **Abrir en navegador**
-```
-http://localhost:8000
-```
+El comando levanta el emulador de Firestore con el proyecto `demo-voz-portena`, corre [tests-rules/firestore.spec.ts](tests-rules/firestore.spec.ts) y apaga el emulador. Los proyectos `demo-` no existen en Firebase, así que no se toca ningún dato real. La primera vez descarga el emulador. Los mensajes `PERMISSION_DENIED` del log son los rechazos que los tests esperan.
 
----
+El emulador no exige índices compuestos, así que estos tests no comprueban que el índice esté creado.
 
-## 🔒 Seguridad
+## Estructura
 
-Esta aplicación utiliza **configuración externa** para mantener las credenciales de Firebase seguras:
-
-✅ **Archivos de configuración NO versionados** (config.js, sw-config.js en .gitignore)  
-✅ **Restricciones de API Key** (HTTP referrers en Google Cloud)  
-✅ **Reglas de Firestore** (lectura pública, escritura solo autenticados)  
-✅ **Validación de datos** (límite de caracteres, rango de calificaciones)  
-✅ **Sin edición/eliminación** de comentarios (previene vandalismo)
-
-### 🔧 Configuración Inicial
-
-Para usar esta aplicación localmente:
-
-1. **Copia los archivos de ejemplo:**
-   ```bash
-   cp config.example.js config.js
-   cp sw-config.example.js sw-config.js
-   ```
-
-2. **Edita los archivos** y completa con tus credenciales de Firebase:
-   - Obtén las credenciales en [Firebase Console](https://console.firebase.google.com/)
-   - Proyecto → Configuración → SDK setup
-
-3. **NO subas** `config.js` ni `sw-config.js` a GitHub (ya están en .gitignore)
-
-Ver [SECURITY_SETUP.md](./SECURITY_SETUP.md) para configurar las restricciones de seguridad.
-
----
-
-## 📱 Usar como PWA
-
-### En Android/iOS:
-1. Abre la app en Chrome/Safari
-2. Toca el menú (⋮) → **Agregar a pantalla de inicio**
-3. La app se instalará como aplicación nativa
-
-### En Desktop:
-1. Abre la app en Chrome
-2. Haz clic en el ícono de instalación (➕) en la barra de direcciones
-3. Confirma instalación
-
----
-
-## 🌐 Despliegue en GitHub Pages
-
-La app está configurada para funcionar en GitHub Pages automáticamente:
-
-1. **Fork** este repositorio
-2. Ve a **Settings** → **Pages**
-3. Source: **Deploy from a branch** → **master** → **/ (root)**
-4. Guarda y espera 1-2 minutos
-5. Tu app estará en: `https://tuusuario.github.io/encuesta-caba-pwa/`
-
----
-
-## 📊 Estructura del Proyecto
-
-```
-encuesta-caba-pwa/
-├── index.html              # Página principal (redirige a login)
-├── login.html              # Página de autenticación
-├── encuestas.html          # Página de encuestas
-├── app.js                  # Lógica principal
-├── auth.js                 # Autenticación Firebase
-├── db.js                   # IndexedDB (offline)
-├── style.css               # Estilos
-├── sw.js                   # Service Worker (offline)
-├── firebase-messaging-sw.js # Service Worker (notificaciones)
-├── manifest.json           # PWA Manifest
-├── assets/                 # Imágenes y recursos
-│   ├── categorias/         # Imágenes por categoría
-│   ├── icon.png            # Ícono de la app
-│   └── logo.jpg            # Logo CABA
-└── componentes/            # Componentes reutilizables
-    ├── rating.js           # Sistema de calificación
-    └── listaComentarios.js # Lista de comentarios
-```
-
----
-
-## 🔧 Configuración Firebase (para fork/clone)
-
-Si quieres usar tu propio Firebase:
-
-1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/)
-2. Habilita **Authentication** (Email/Password + Google)
-3. Crea una base de datos **Firestore**
-4. Copia las credenciales de configuración
-5. Reemplaza en `auth.js` y `firebase-messaging-sw.js`:
-
-```javascript
-const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto-id",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
-};
-```
-
-6. Configura las reglas de Firestore (ver [SECURITY_SETUP.md](./SECURITY_SETUP.md))
-
----
-
-## 📝 Funcionalidades Offline
-
-La app funciona completamente sin conexión gracias a:
-
-- **Service Workers**: Caché de recursos estáticos
-- **IndexedDB**: Almacenamiento local de comentarios
-- **Sincronización automática**: Al recuperar conexión, los comentarios pendientes se suben a Firestore
-
----
-
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas:
-
-1. Fork el proyecto
-2. Crea una rama (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -m 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
-
----
-
-## 📄 Licencia
-
-Este proyecto es de código abierto y está disponible bajo la licencia MIT.
-
----
-
-## 👨‍💻 Autor
-
-**Juan Trezza**
-
-- GitHub: [@JuanTrezza](https://github.com/JuanTrezza)
-- LinkedIn: www.linkedin.com/in/juanmorenotrezza
----
-
-## 🐛 Reporte de Bugs
-
-Si encuentras un bug, por favor abre un [issue](https://github.com/JuanTrezza/encuesta-caba-pwa/issues) con:
-
-- Descripción del problema
-- Pasos para reproducir
-- Navegador y versión
-- Capturas de pantalla (si aplica)
-
----
-
-## ⭐ Si te gustó este proyecto
-
-Dale una ⭐ en GitHub y compártelo!
-
+- `src/services/`: capa de datos. Las páginas no importan Firebase.
+- `src/pages/` y `src/components/`: interfaz.
+- `src/data/`: categorías y barrios.
+- `legacy/`: sitio anterior. No se publica.
+- `docs/firebase-setup.md`: configuración de Firebase y GitHub.

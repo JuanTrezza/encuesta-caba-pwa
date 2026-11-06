@@ -1,7 +1,28 @@
-# Ignore local config files that contain API keys / secrets
+# Config local con valores reales
 config.js
 sw-config.js
+.env
+.env.*
+!.env.example
+*.local
 
-# Node / IDE cruft (if needed later)
+# Dependencias y builds
 node_modules/
+dist/
+dist-e2e/
+*.tsbuildinfo
+
+# Logs y archivos temporales
+*.log
+pglite-debug.log
+limpiar-historial.ps1
+.firebase/
+
+# Tests
+/screenshots/
+test-results/
+playwright-report/
+
+# IDE
 .vscode/
+.DS_Store

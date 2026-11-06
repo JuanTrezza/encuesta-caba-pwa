@@ -1,62 +1,24 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-
-  <title>Encuesta Ciudad de Buenos Aires</title>
-</head>
-<body>
-  <div id="nav">
-    <a href=""><img src="assets/logo.jpg" class="logo"/></a>
-    <h1>Ciudad de Buenos Aires</h1>
-    <button id="tema-toggle">🌙 Tema Oscuro</button>
-    <button id="sesion-toggle">🔐 Sesión</button>
-    <button id="notificaciones-toggle">🔔 Activar Notificaciones</button>
-
-  </div>
-
-  <div class="tabs">
-    <button data-tab="limpieza">🧹 Limpieza</button>
-    <button data-tab="transporte">🚌 Transporte</button>
-    <button data-tab="verdes">🌳 Espacios Verdes</button>
-    <button data-tab="eventos">🎉 Eventos Gratuitos</button>
-    <button data-tab="subte">🚇 Subte</button>
-    <button data-tab="seguridad">🛡️ Seguridad</button>
-    <button data-tab="accesibilidad">♿ Accesibilidad</button>
-  </div>
-  <div id="content"></div>
-
-  <script type="module" src="app.js"></script>
-
-  <script type="module">
-    import './auth.js';
-    import { cerrarSesion, usuarioActual } from './auth.js';
-
-    const sesionBtn = document.getElementById("sesion-toggle");
-
-    usuarioActual(user => {
-      if (!user) {
-        alert("Debes iniciar sesión para acceder.");
-        window.location.href = "login.html";
-      }
-
-      if (user) {
-        sesionBtn.textContent = "🔓 Cerrar sesión";
-        sesionBtn.onclick = async () => {
-          await cerrarSesion();
-          location.href = "login.html";
-        };
-      } else {
-        sesionBtn.textContent = "🔐 Iniciar sesión";
-        sesionBtn.onclick = () => {
-          location.href = "login.html";
-        };
-      }
-    });
-  </script>
-</body>
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voz Porteña</title>
+    <meta
+      name="description"
+      content="Voz Porteña: proyecto independiente para puntuar y comentar cómo funciona la vida cotidiana en los 48 barrios de Buenos Aires."
+    />
+    <meta name="theme-color" content="#A92C1C" />
+    <link rel="icon" type="image/svg+xml" href="/encuesta-caba-pwa/logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Rozha+One&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

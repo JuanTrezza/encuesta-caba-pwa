@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Voz Porteña">
+  <path fill="#A92C1C" d="M12 4h40a8 8 0 0 1 8 8v30a8 8 0 0 1-8 8H29L16 61V50h-4a8 8 0 0 1-8-8V12a8 8 0 0 1 8-8Z"/>
+  <rect x="8.5" y="8.5" width="47" height="37" rx="4.5" fill="none" stroke="#F8F1E4" stroke-width="1.5"/>
+  <path fill="#F8F1E4" d="M15 14h11l6 19.5L38.5 14h3.5L31.5 41h-3.5Z"/>
+  <path fill="none" stroke="#F0B44C" stroke-width="2" stroke-linecap="round" d="M42 15c4-2.5 9-.5 9 3.5 0 3.5-5 4.5-6 1.5-.6-1.8 1.8-3 3-1.5"/>
+</svg>

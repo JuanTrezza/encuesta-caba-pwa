@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --crema: #f8f1e4;
+  --tinta: #2b2622;
+  --foco: #17594a;
+}
+
+body {
+  background-color: var(--crema);
+  color: var(--tinta);
+  font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow-wrap: anywhere;
+}
+
+/* Foco siempre visible: verde sobre fondos claros, crema dentro de .sobre-oscuro */
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.sobre-oscuro :focus-visible {
+  outline-color: var(--crema);
+}
+
+@layer components {
+  .boton {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-5 py-2.5 text-center font-bold no-underline transition-colors;
+  }
+  .boton-primario {
+    @apply boton bg-rojo text-crema hover:bg-rojo-oscuro;
+  }
+  .boton-claro {
+    @apply boton bg-crema text-rojo-oscuro hover:bg-white;
+  }
+  .boton-borde {
+    @apply boton border-2 border-tinta bg-transparent text-tinta hover:bg-tinta hover:text-crema;
+  }
+  .campo {
+    @apply block min-h-[44px] w-full rounded-md border-2 border-junta bg-papel px-3 py-2 text-base text-tinta;
+  }
+  .campo[aria-invalid='true'] {
+    @apply border-rojo;
+  }
+  .enlace {
+    @apply font-bold text-verde underline decoration-2 underline-offset-2 hover:text-verde-oscuro;
+  }
+  .cartel {
+    @apply rounded-lg border-2 border-tinta bg-papel;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

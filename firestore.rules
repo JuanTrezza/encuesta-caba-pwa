@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Estas listas tienen que coincidir con src/data/categorias.ts y src/data/barrios.ts.
+    // npm run test:rules prueba cada valor contra esos archivos.
+    function categoriaValida(categoria) {
+      return categoria in [
+        'limpieza', 'transporte', 'verdes', 'eventos', 'subte', 'seguridad', 'accesibilidad'
+      ];
+    }
+
+    function barrioValido(barrio) {
+      return barrio in [
+        'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo', 'Caballito', 'Chacarita',
+        'Coghlan', 'Colegiales', 'Constitución', 'Flores', 'Floresta', 'La Boca', 'La Paternal', 'Liniers',
+        'Mataderos', 'Monte Castro', 'Montserrat', 'Nueva Pompeya', 'Núñez', 'Palermo', 'Parque Avellaneda',
+        'Parque Chacabuco', 'Parque Chas', 'Parque Patricios', 'Puerto Madero', 'Recoleta', 'Retiro', 'Saavedra',
+        'San Cristóbal', 'San Nicolás', 'San Telmo', 'Vélez Sársfield', 'Versalles', 'Villa Crespo',
+        'Villa del Parque', 'Villa Devoto', 'Villa General Mitre', 'Villa Lugano', 'Villa Luro', 'Villa Ortúzar',
+        'Villa Pueyrredón', 'Villa Real', 'Villa Riachuelo', 'Villa Santa Rita', 'Villa Soldati', 'Villa Urquiza'
+      ];
+    }
+
+    function opinionValida() {
+      let datos = request.resource.data;
+      return datos.keys().hasAll(['uid', 'fecha', 'texto', 'calificacion', 'categoria'])
+        && datos.keys().hasOnly(['uid', 'fecha', 'texto', 'calificacion', 'categoria', 'barrio'])
+        && datos.uid == request.auth.uid
+        && datos.fecha == request.time
+        && datos.texto is string
+        && datos.texto.trim().size() >= 1
+        && datos.texto.size() <= 500
+        && datos.calificacion is int
+        && datos.calificacion >= 1
+        && datos.calificacion <= 5
+        && categoriaValida(datos.categoria)
+        && (!('barrio' in datos) || barrioValido(datos.barrio));
+    }
+
+    match /comentarios/{comentarioId} {
+      allow read: if true;
+      allow create: if request.auth != null && opinionValida();
+      allow update, delete: if false;
+    }
+
+    // Todo lo demás queda cerrado
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
