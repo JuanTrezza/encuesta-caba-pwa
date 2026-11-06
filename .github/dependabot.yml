@@ -1,8 +1,22 @@
-# Configuración de Dependabot para el proyecto
 version: 2
 updates:
-  # No monitorear secretos en archivos públicos intencionalmente
-  - package-ecosystem: "npm"
+  - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: monthly
+    # Solo minor y patch: los saltos de versión mayor se hacen a mano y a propósito.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      desarrollo:
+        dependency-type: development
+        patterns: ["*"]
+      produccion:
+        dependency-type: production
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

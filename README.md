@@ -1,5 +1,7 @@
 # Voz Porteña
 
+[![CI](https://github.com/JuanTrezza/encuesta-caba-pwa/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/JuanTrezza/encuesta-caba-pwa/actions/workflows/ci.yml)
+
 Sitio para puntuar y comentar cómo funciona la vida cotidiana en los 48 barrios de Buenos Aires: limpieza, transporte, espacios verdes, eventos gratuitos, subte, seguridad y accesibilidad.
 
 Proyecto independiente, sin relación con el Gobierno de la Ciudad de Buenos Aires.
@@ -23,7 +25,7 @@ La app corre en `http://localhost:5173/encuesta-caba-pwa/`.
 | Comando | Qué hace |
 |---|---|
 | `npm run typecheck` | Corre `tsc` |
-| `npm run build` | Corre `tsc` y genera `dist/` |
+| `npm run build` | Corre `tsc`, valida `VITE_FIREBASE_*` y genera `dist/`. Falla si la config está incompleta o tiene un formato inválido |
 | `npm run test:e2e` | Corre Playwright en 375 y 1440 px, con los services mockeados |
 | `npm run test:rules` | Prueba las reglas de Firestore en el emulador. Requiere Java 21 o superior |
 

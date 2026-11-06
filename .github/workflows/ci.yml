@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# No usa secrets: test:e2e reemplaza los services por mocks y test:rules corre en el emulador
+# con el proyecto demo-voz-portena. El build valida el formato de VITE_FIREBASE_*, así que
+# recibe valores falsos; este build no se publica.
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaValorFalsoSoloParaCI
+          VITE_FIREBASE_AUTH_DOMAIN: demo-voz-portena.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: demo-voz-portena
+          VITE_FIREBASE_STORAGE_BUCKET: demo-voz-portena.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          VITE_FIREBASE_APP_ID: 1:000000000000:web:valorfalso
+
+      - name: Leer la versión de Playwright
+        id: playwright
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Caché de Chromium
+        id: cache-chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Instalar Chromium
+        if: steps.cache-chromium.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # La caché guarda el navegador, no las librerías del sistema
+      - name: Instalar dependencias del sistema para Chromium
+        if: steps.cache-chromium.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Tests e2e
+        run: npm run test:e2e
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Leer la versión de firebase-tools
+        id: firebase-tools
+        run: echo "version=$(node -p "require('./node_modules/firebase-tools/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Caché del emulador de Firestore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ steps.firebase-tools.outputs.version }}
+
+      - name: Tests de reglas
+        run: npm run test:rules
+
+      - name: Guardar resultados si falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-de-tests
+          path: |
+            test-results/
+            screenshots/
+          if-no-files-found: ignore
+          retention-days: 7

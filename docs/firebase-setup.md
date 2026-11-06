@@ -79,4 +79,6 @@ En **Google Cloud Console → APIs & Services → Credentials**:
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`
    - `VITE_FIREBASE_APP_ID`
    - `VITE_FIREBASE_APPCHECK_SITE_KEY` (opcional)
+
+   Pegá solo el valor, sin el nombre del campo, las comillas ni la coma del `firebaseConfig`. Las comillas y los espacios de los extremos se limpian solos, pero el deploy falla si queda otra cosa inválida, como una coma. El mensaje nombra la variable y no muestra su valor.
 2. En **Settings → Pages**, poné **Source** en **GitHub Actions**.
