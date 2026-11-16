@@ -2,6 +2,9 @@ import type { CategoriaId } from '../data/categorias'
 
 export const MAX_COMENTARIO = 500
 
+/** Con menos opiniones que estas, un barrio figura como "sin datos" en el mapa y en los rankings */
+export const MINIMO_OPINIONES = 3
+
 export type Calificacion = 1 | 2 | 3 | 4 | 5
 
 export interface Usuario {
@@ -29,11 +32,42 @@ export interface NuevoComentario {
   barrio?: string
 }
 
-export interface ResumenCategoria {
+/** Opinión escrita sin conexión, guardada en IndexedDB hasta poder enviarla */
+export interface OpinionPendiente extends NuevoComentario {
+  id: number
+  /** Cuenta que la escribió: las reglas exigen enviarla con ese mismo uid */
+  uid: string
+  /** Cuándo se escribió. Solo se muestra: la fecha del documento la pone el servidor al enviar. */
+  creado: string
+  /** Si el servidor la rechazó, el motivo. No se reintenta sola. */
+  error?: string
+}
+
+export interface Promedio {
   total: number
   /** 0 cuando todavía no hay opiniones */
   promedio: number
+}
+
+export interface ResumenCategoria extends Promedio {
   distribucion: Record<Calificacion, number>
+}
+
+export interface Panorama {
+  general: ResumenCategoria
+  categorias: (Promedio & { id: CategoriaId })[]
+}
+
+export interface PuntoMensual {
+  /** AAAA-MM */
+  mes: string
+  total: number
+  /** null si ese mes no hubo opiniones */
+  promedio: number | null
+}
+
+export interface EstadisticaBarrio extends Promedio {
+  barrio: string
 }
 
 /** Error con un mensaje listo para mostrar: las páginas no conocen los códigos de Firebase */
@@ -48,3 +82,8 @@ export class ErrorServicio extends Error {
 }
 
 export const CODIGO_CANCELADO = 'cancelado'
+
+/** Fallas de red: la operación se puede reintentar más tarde */
+export function esErrorDeRed(error: unknown): boolean {
+  return error instanceof ErrorServicio && (error.codigo === 'unavailable' || error.codigo === 'sin-conexion')
+}

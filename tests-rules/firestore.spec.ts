@@ -24,7 +24,15 @@ import {
 } from 'firebase/firestore'
 import { BARRIOS } from '../src/data/barrios'
 import { CATEGORIAS } from '../src/data/categorias'
-import { consultarRecientes, normalizarFecha, parsearComentario } from '../src/services/comentariosConsulta'
+import {
+  consultarBarrios,
+  consultarEvolucion,
+  consultarPanorama,
+  consultarRecientes,
+  consultarResumen,
+  normalizarFecha,
+  parsearComentario,
+} from '../src/services/comentariosConsulta'
 
 const UID = 'vecina'
 
@@ -249,5 +257,67 @@ test.describe('compatibilidad con documentos viejos', () => {
     await sembrar('viejo', VIEJO)
     const recientes = await consultarRecientes(base(anonimo()), 'subte', 10)
     expect(recientes.map((c) => c.id)).toEqual(['viejo', 'nuevo'])
+  })
+})
+
+test.describe('agregados del mapa y de los resultados', () => {
+  // Fechas en hora local, igual que los límites de mes que calcula la app
+  const el = (mes: number, dia: number) => new Date(2026, mes - 1, dia, 12)
+
+  test.beforeEach(async () => {
+    const nueva = (categoria: string, barrio: string, calificacion: number, fecha: Date) => ({
+      uid: UID,
+      texto: 'x',
+      categoria,
+      barrio,
+      calificacion,
+      fecha: Timestamp.fromDate(fecha),
+    })
+    // Documento del sitio anterior: fecha como string y sin barrio
+    await sembrar('vieja', { texto: 'x', categoria: 'subte', calificacion: 3, fecha: el(9, 10).toISOString() })
+    await sembrar('a', nueva('subte', 'Boedo', 5, el(10, 5)))
+    await sembrar('b', nueva('subte', 'Boedo', 4, el(10, 20)))
+    await sembrar('c', nueva('subte', 'Almagro', 1, el(11, 2)))
+    await sembrar('d', nueva('limpieza', 'Boedo', 2, el(11, 3)))
+  })
+
+  test('panorama: distribución general y promedio por tema', async () => {
+    const panorama = await consultarPanorama(base(anonimo()))
+    expect(panorama.general).toEqual({ total: 5, promedio: 3, distribucion: { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 } })
+    expect(panorama.categorias).toHaveLength(7)
+    expect(panorama.categorias.find((c) => c.id === 'subte')).toEqual({ id: 'subte', total: 4, promedio: 3.25 })
+    expect(panorama.categorias.find((c) => c.id === 'limpieza')).toEqual({ id: 'limpieza', total: 1, promedio: 2 })
+    expect(panorama.categorias.find((c) => c.id === 'verdes')).toEqual({ id: 'verdes', total: 0, promedio: 0 })
+  })
+
+  test('el resumen de una categoría coincide con el panorama', async () => {
+    const resumen = await consultarResumen(base(anonimo()), 'subte')
+    expect(resumen).toEqual({ total: 4, promedio: 3.25, distribucion: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 1 } })
+  })
+
+  test('evolución mensual: suma los dos formatos de fecha', async () => {
+    const puntos = await consultarEvolucion(base(anonimo()), 4, el(11, 15))
+    expect(puntos).toEqual([
+      { mes: '2026-08', total: 0, promedio: null },
+      { mes: '2026-09', total: 1, promedio: 3 },
+      { mes: '2026-10', total: 2, promedio: 4.5 },
+      { mes: '2026-11', total: 2, promedio: 1.5 },
+    ])
+  })
+
+  test('evolución mensual: sin documentos viejos en el período', async () => {
+    const puntos = await consultarEvolucion(base(anonimo()), 2, el(11, 15))
+    expect(puntos).toEqual([
+      { mes: '2026-10', total: 2, promedio: 4.5 },
+      { mes: '2026-11', total: 2, promedio: 1.5 },
+    ])
+  })
+
+  test('barrios: promedio y cantidad por barrio dentro de un tema', async () => {
+    const barrios = await consultarBarrios(base(anonimo()), 'subte')
+    expect(barrios).toHaveLength(48)
+    expect(barrios.find((b) => b.barrio === 'Boedo')).toEqual({ barrio: 'Boedo', total: 2, promedio: 4.5 })
+    expect(barrios.find((b) => b.barrio === 'Almagro')).toEqual({ barrio: 'Almagro', total: 1, promedio: 1 })
+    expect(barrios.filter((b) => b.total > 0)).toHaveLength(2)
   })
 })

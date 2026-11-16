@@ -3,8 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { RatingInput } from '../components/RatingInput'
 import { BARRIOS } from '../data/barrios'
 import { buscarCategoria, CATEGORIAS, type CategoriaId } from '../data/categorias'
+import { useAuth } from '../context/AuthContext'
 import { useTitulo } from '../hooks/useTitulo'
-import { publicarComentario } from '../services/comentarios'
+import { enviarOpinion } from '../services/opiniones'
 import { MAX_COMENTARIO, type Calificacion } from '../services/types'
 
 interface Errores {
@@ -17,11 +18,13 @@ type Envio =
   | { estado: 'inactivo' }
   | { estado: 'enviando' }
   | { estado: 'ok'; categoria: CategoriaId }
+  | { estado: 'pendiente'; categoria: CategoriaId }
   | { estado: 'error'; mensaje: string }
 
 export function OpinarPage() {
   useTitulo('Opinar')
   const [params] = useSearchParams()
+  const { usuario } = useAuth()
   const [categoria, setCategoria] = useState<CategoriaId | ''>(buscarCategoria(params.get('categoria'))?.id ?? '')
   const [calificacion, setCalificacion] = useState<Calificacion | null>(null)
   const [texto, setTexto] = useState('')
@@ -31,7 +34,8 @@ export function OpinarPage() {
   const formulario = useRef<HTMLFormElement>(null)
 
   const enviando = envio.estado === 'enviando'
-  const nombreCategoria = envio.estado === 'ok' ? buscarCategoria(envio.categoria)?.nombre : undefined
+  const nombreCategoria =
+    envio.estado === 'ok' || envio.estado === 'pendiente' ? buscarCategoria(envio.categoria)?.nombre : undefined
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
@@ -45,7 +49,7 @@ export function OpinarPage() {
     }
     setErrores(nuevos)
 
-    if (!categoria || !calificacion || !limpio) {
+    if (!categoria || !calificacion || !limpio || !usuario) {
       setEnvio({ estado: 'error', mensaje: 'Revisá los campos marcados.' })
       // Lleva el foco al primer campo con error
       requestAnimationFrame(() => formulario.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())
@@ -54,8 +58,11 @@ export function OpinarPage() {
 
     setEnvio({ estado: 'enviando' })
     try {
-      await publicarComentario({ texto: limpio, calificacion, categoria, barrio: barrio || undefined })
-      setEnvio({ estado: 'ok', categoria })
+      const resultado = await enviarOpinion(
+        { texto: limpio, calificacion, categoria, ...(barrio ? { barrio } : {}) },
+        usuario.uid,
+      )
+      setEnvio({ estado: resultado === 'enviada' ? 'ok' : 'pendiente', categoria })
       setCalificacion(null)
       setTexto('')
       setBarrio('')
@@ -152,6 +159,15 @@ export function OpinarPage() {
           <div role="status" aria-live="polite" className="[&>*]:mt-4">
             {envio.estado === 'enviando' && <p>Enviando tu opinión…</p>}
             {envio.estado === 'error' && <p className="font-bold text-rojo">{envio.mensaje}</p>}
+            {envio.estado === 'pendiente' && (
+              <div className="rounded-md border-2 border-dashed border-junta bg-crema p-4">
+                <p className="font-bold">Estás sin conexión: tu opinión quedó pendiente de envío.</p>
+                <p className="mt-1">Se envía sola cuando vuelva la conexión. No hace falta que dejes esta página abierta.</p>
+                <Link to={`/categoria/${envio.categoria}`} className="enlace mt-1 inline-block">
+                  Ver opiniones de {nombreCategoria}
+                </Link>
+              </div>
+            )}
             {envio.estado === 'ok' && (
               <div className="rounded-md border-2 border-verde bg-crema p-4">
                 <p className="font-bold text-verde">¡Gracias! Tu opinión ya está publicada.</p>

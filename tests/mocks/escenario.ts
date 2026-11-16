@@ -9,6 +9,12 @@ export interface EscenarioMock {
   envio?: 'ok' | 'error'
   /** Reflejo de lo publicado, para que los tests lo verifiquen */
   publicados?: unknown[]
+  /** Registra el service worker real. Por defecto no, para que los tests no dependan de su caché. */
+  sw?: boolean
+  /** Simula que hay una versión nueva esperando */
+  actualizacion?: boolean
+  /** Lo marca el mock cuando la persona toca "Actualizar" */
+  actualizada?: boolean
 }
 
 declare global {

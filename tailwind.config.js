@@ -18,6 +18,12 @@ export default {
         display: ['"Rozha One"', 'Georgia', 'serif'],
         sans: ['"Atkinson Hyperlegible"', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
       },
+      keyframes: {
+        entrar: { from: { transform: 'translateX(100%)' }, to: { transform: 'translateX(0)' } },
+      },
+      animation: {
+        entrar: 'entrar 0.2s ease-out',
+      },
       boxShadow: {
         cartel: '0 2px 0 #DDD3C3',
       },

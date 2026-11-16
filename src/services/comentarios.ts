@@ -1,21 +1,25 @@
+// Acceso a Firestore. Las páginas no importan este módulo: usan services/opiniones.ts.
 import { getAuth } from 'firebase/auth'
-import {
-  addDoc,
-  collection,
-  getCountFromServer,
-  getFirestore,
-  query,
-  serverTimestamp,
-  where,
-  type CollectionReference,
-  type DocumentData,
-} from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, type CollectionReference, type DocumentData } from 'firebase/firestore'
 import type { CategoriaId } from '../data/categorias'
-import { consultarRecientes } from './comentariosConsulta'
+import {
+  consultarBarrios,
+  consultarEvolucion,
+  consultarPanorama,
+  consultarRecientes,
+  consultarResumen,
+} from './comentariosConsulta'
 import { obtenerApp } from './firebase'
-import { ErrorServicio, type Calificacion, type Comentario, type NuevoComentario, type ResumenCategoria } from './types'
-
-const ESTRELLAS: readonly Calificacion[] = [1, 2, 3, 4, 5]
+import { obtenerDb } from './firestore'
+import {
+  ErrorServicio,
+  type Comentario,
+  type EstadisticaBarrio,
+  type NuevoComentario,
+  type Panorama,
+  type PuntoMensual,
+  type ResumenCategoria,
+} from './types'
 
 const MENSAJES: Record<string, string> = {
   'permission-denied': 'No tenés permiso para hacer esto. Probá volver a ingresar.',
@@ -33,42 +37,44 @@ function traducir(error: unknown): ErrorServicio {
 }
 
 function coleccion(): CollectionReference<DocumentData> {
-  return collection(getFirestore(obtenerApp()), 'comentarios')
+  return collection(obtenerDb(), 'comentarios')
+}
+
+async function pedir<T>(consulta: (col: CollectionReference<DocumentData>) => Promise<T>): Promise<T> {
+  try {
+    return await consulta(coleccion())
+  } catch (error) {
+    throw traducir(error)
+  }
+}
+
+export function obtenerResumen(categoria: CategoriaId): Promise<ResumenCategoria> {
+  return pedir((col) => consultarResumen(col, categoria))
+}
+
+/** Sin conexión responde con lo que haya en la caché local de Firestore */
+export function obtenerRecientes(categoria: CategoriaId, cantidad = 10): Promise<Comentario[]> {
+  return pedir((col) => consultarRecientes(col, categoria, cantidad))
+}
+
+export function obtenerPanorama(): Promise<Panorama> {
+  return pedir(consultarPanorama)
+}
+
+export function obtenerEvolucion(): Promise<PuntoMensual[]> {
+  return pedir((col) => consultarEvolucion(col))
+}
+
+export function obtenerBarrios(categoria: CategoriaId): Promise<EstadisticaBarrio[]> {
+  return pedir((col) => consultarBarrios(col, categoria))
 }
 
 /**
- * Cuenta por estrellas con agregaciones del servidor: no descarga los documentos.
- * Son solo igualdades, así que Firestore combina los índices automáticos y no pide uno compuesto.
+ * Guarda solo el uid: el nombre y el mail del usuario no van en el documento, que es de lectura pública.
+ * La fecha la pone el servidor en el momento del envío.
  */
-export async function obtenerResumen(categoria: CategoriaId): Promise<ResumenCategoria> {
-  try {
-    const col = coleccion()
-    const cantidades = await Promise.all(
-      ESTRELLAS.map(async (estrellas) => {
-        const q = query(col, where('categoria', '==', categoria), where('calificacion', '==', estrellas))
-        return (await getCountFromServer(q)).data().count
-      }),
-    )
-    const [c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0] = cantidades
-    const total = c1 + c2 + c3 + c4 + c5
-    const suma = c1 + c2 * 2 + c3 * 3 + c4 * 4 + c5 * 5
-    return { total, promedio: total ? suma / total : 0, distribucion: { 1: c1, 2: c2, 3: c3, 4: c4, 5: c5 } }
-  } catch (error) {
-    throw traducir(error)
-  }
-}
-
-export async function obtenerRecientes(categoria: CategoriaId, cantidad = 10): Promise<Comentario[]> {
-  try {
-    return await consultarRecientes(coleccion(), categoria, cantidad)
-  } catch (error) {
-    throw traducir(error)
-  }
-}
-
-/** Guarda solo el uid: el nombre y el mail del usuario no van en el documento, que es de lectura pública */
 export async function publicarComentario({ texto, calificacion, categoria, barrio }: NuevoComentario): Promise<void> {
-  // Sin conexión, addDoc queda esperando para siempre. La cola offline llega en una etapa posterior.
+  // Sin conexión, addDoc queda esperando: la cola de services/opiniones.ts evita llegar acá en ese caso
   if (!navigator.onLine) throw new ErrorServicio('Estás sin conexión. Tu opinión no se envió.', 'sin-conexion')
   try {
     const uid = getAuth(obtenerApp()).currentUser?.uid

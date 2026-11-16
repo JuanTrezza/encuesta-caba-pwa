@@ -41,14 +41,20 @@ npx firebase deploy --only firestore:rules,firestore:indexes
 
 Este `firebase.json` no define hosting, así que estos comandos no publican el sitio.
 
-### Índice necesario
+### Índices necesarios
 
-| Colección | Campo | Orden |
-|---|---|---|
-| `comentarios` | `categoria` | Ascendente |
-| `comentarios` | `fecha` | Descendente |
+Todos son de la colección `comentarios`, con alcance **Collection**.
 
-Lo usan las dos consultas de comentarios recientes. Si ya lo creaste desde el link de la consola, el deploy no lo duplica. Los conteos por estrellas solo usan igualdades y no necesitan índice compuesto.
+| Campos, en orden | Lo usa |
+|---|---|
+| `categoria` ASC, `fecha` DESC | Comentarios recientes |
+| `categoria` ASC, `calificacion` ASC | Promedio por tema, en Resultados |
+| `categoria` ASC, `barrio` ASC, `calificacion` ASC | Promedio por barrio, en Mapa y Resultados |
+| `fecha` ASC, `calificacion` ASC | Evolución mensual, en Resultados |
+
+Los tres últimos son para consultas con `average()`. La documentación de Firestore recomienda esa forma de índice, pero no aclara si es obligatoria en todos los casos. Si falta uno, la página muestra un error y la consola del navegador trae el link para crearlo; si alguno sobra, se puede borrar sin afectar al resto. Los conteos por estrellas solo usan igualdades y no necesitan índice compuesto.
+
+Si ya creaste alguno desde el link de la consola, el deploy no lo duplica.
 
 ## 3. API key web
 

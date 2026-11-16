@@ -1,27 +1,49 @@
 // Reemplaza a src/services/comentarios.ts en el build --mode e2e. `contrato` hace que tsc falle si se desalinean.
-import type { CategoriaId } from '../../src/data/categorias'
+import { BARRIOS } from '../../src/data/barrios'
+import { CATEGORIAS, type CategoriaId } from '../../src/data/categorias'
 import type * as Real from '../../src/services/comentarios'
-import { ErrorServicio, type Comentario, type NuevoComentario, type ResumenCategoria } from '../../src/services/types'
+import {
+  ErrorServicio,
+  type Comentario,
+  type EstadisticaBarrio,
+  type NuevoComentario,
+  type Panorama,
+  type PuntoMensual,
+  type ResumenCategoria,
+} from '../../src/services/types'
 import { escenario, esperar } from './escenario'
+
+const SIN_RED = 'No pudimos conectarnos. Revisá tu internet y volvé a intentar.'
+const DISTRIBUCION = { 1: 3, 2: 5, 3: 12, 4: 40, 5: 68 }
+const RESUMEN: ResumenCategoria = { total: 128, promedio: (3 + 10 + 36 + 160 + 340) / 128, distribucion: DISTRIBUCION }
+const VACIO: ResumenCategoria = { total: 0, promedio: 0, distribucion: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
 
 async function preparar(): Promise<void> {
   const e = escenario()
   await esperar(e.datos === 'lento' ? 60_000 : 30)
-  if (e.errorUnaVez) throw new ErrorServicio('No pudimos conectarnos. Revisá tu internet y volvé a intentar.', 'unavailable')
-  if (e.datos === 'error') throw new ErrorServicio('No pudimos conectarnos. Revisá tu internet y volvé a intentar.', 'unavailable')
+  if (e.errorUnaVez || e.datos === 'error') throw new ErrorServicio(SIN_RED, 'unavailable')
+}
+
+/** Igual que en Firestore: los agregados solo los responde el servidor */
+async function prepararAgregado(): Promise<void> {
+  await preparar()
+  if (!navigator.onLine) throw new ErrorServicio(SIN_RED, 'unavailable')
 }
 
 export async function obtenerResumen(_categoria: CategoriaId): Promise<ResumenCategoria> {
-  await preparar()
-  if (escenario().datos === 'vacio') return { total: 0, promedio: 0, distribucion: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
-  const distribucion = { 1: 3, 2: 5, 3: 12, 4: 40, 5: 68 }
-  return { total: 128, promedio: (3 + 10 + 36 + 160 + 340) / 128, distribucion }
+  await prepararAgregado()
+  return escenario().datos === 'vacio' ? VACIO : RESUMEN
 }
 
+/** Igual que en Firestore con caché persistente: sin conexión devuelve lo que ya tenía */
 export async function obtenerRecientes(categoria: CategoriaId): Promise<Comentario[]> {
   await preparar()
   if (escenario().datos === 'vacio') return []
+  const publicados = ((escenario().publicados ?? []) as NuevoComentario[])
+    .filter((p) => p.categoria === categoria)
+    .map((p, i) => ({ ...p, id: `publicado-${i}`, fecha: '2026-11-01T12:00:00.000Z' }))
   return [
+    ...publicados,
     {
       id: 'nuevo',
       texto: 'Pasan seguido, pero a la hora pico no se puede ni subir.',
@@ -48,9 +70,37 @@ export async function obtenerRecientes(categoria: CategoriaId): Promise<Comentar
   ]
 }
 
+export async function obtenerPanorama(): Promise<Panorama> {
+  await prepararAgregado()
+  if (escenario().datos === 'vacio') return { general: VACIO, categorias: CATEGORIAS.map(({ id }) => ({ id, total: 0, promedio: 0 })) }
+  return {
+    general: RESUMEN,
+    // "eventos" queda sin opiniones para probar ese caso
+    categorias: CATEGORIAS.map(({ id }, i) => (id === 'eventos' ? { id, total: 0, promedio: 0 } : { id, total: 10 + i * 4, promedio: 2.4 + i * 0.4 })),
+  }
+}
+
+export async function obtenerEvolucion(): Promise<PuntoMensual[]> {
+  await prepararAgregado()
+  return Array.from({ length: 12 }, (_, i) => {
+    const mes = `${i < 1 ? 2025 : 2026}-${String(((i + 11) % 12) + 1).padStart(2, '0')}`
+    // Dos meses sin opiniones: la línea tiene que cortarse ahí
+    return i === 3 || i === 4 ? { mes, total: 0, promedio: null } : { mes, total: 4 + i * 2, promedio: 3 + ((i * 7) % 15) / 10 }
+  })
+}
+
+export async function obtenerBarrios(_categoria: CategoriaId): Promise<EstadisticaBarrio[]> {
+  await prepararAgregado()
+  // Cubre los cinco tramos de la escala y deja varios barrios sin datos suficientes
+  return BARRIOS.map((barrio, i) =>
+    i % 6 === 0 ? { barrio, total: i % 12 === 0 ? 0 : 2, promedio: i % 12 === 0 ? 0 : 5 } : { barrio, total: 3 + i, promedio: 1 + ((i * 37) % 41) / 10 },
+  )
+}
+
 export async function publicarComentario(nuevo: NuevoComentario): Promise<void> {
   const e = escenario()
   await esperar()
+  if (!navigator.onLine) throw new ErrorServicio('Estás sin conexión. Tu opinión no se envió.', 'sin-conexion')
   if (e.envio === 'error') throw new ErrorServicio('No tenés permiso para hacer esto. Probá volver a ingresar.', 'permission-denied')
   ;(e.publicados ??= []).push(nuevo)
 }
@@ -58,5 +108,8 @@ export async function publicarComentario(nuevo: NuevoComentario): Promise<void> 
 export const contrato = {
   obtenerResumen,
   obtenerRecientes,
+  obtenerPanorama,
+  obtenerEvolucion,
+  obtenerBarrios,
   publicarComentario,
 } satisfies typeof Real

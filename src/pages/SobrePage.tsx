@@ -42,6 +42,10 @@ export function SobrePage() {
             <li>Se publican tu puntuación, tu comentario, la fecha y, si lo elegís, tu barrio.</li>
             <li>Tu nombre y tu mail no se guardan junto a tu opinión.</li>
             <li>
+              Si opinás sin conexión, la opinión queda guardada en este dispositivo hasta que se envía. El sitio
+              también guarda acá lo que ya viste, para poder mostrarlo sin conexión.
+            </li>
+            <li>
               Cada opinión guarda un código interno de tu cuenta. No muestra quién sos, pero es público en la base de
               datos y permite saber qué opiniones salieron de la misma cuenta.
             </li>

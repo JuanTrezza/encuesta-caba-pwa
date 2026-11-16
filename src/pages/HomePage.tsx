@@ -77,7 +77,17 @@ export function HomePage() {
         <h2 id="temas" className="font-display text-3xl md:text-4xl">
           Los temas
         </h2>
-        <p className="mt-2 text-adoquin">Entrá a uno para ver el promedio y qué dicen los vecinos.</p>
+        <p className="mt-2 text-adoquin">
+          Entrá a uno para ver el promedio y qué dicen los vecinos. También podés ver el{' '}
+          <Link to="/mapa" className="enlace">
+            mapa por barrio
+          </Link>{' '}
+          y los{' '}
+          <Link to="/resultados" className="enlace">
+            resultados generales
+          </Link>
+          .
+        </p>
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {CATEGORIAS.map((categoria) => (
             <li key={categoria.id}>

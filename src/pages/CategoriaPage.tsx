@@ -6,12 +6,16 @@ import { EstadoError, EstadoVacio, Esqueleto } from '../components/Estados'
 import { Estrellas, formatearPromedio } from '../components/Estrellas'
 import { buscarCategoria, type Categoria } from '../data/categorias'
 import { useAsync } from '../hooks/useAsync'
+import { useCola } from '../hooks/useCola'
 import { useTitulo } from '../hooks/useTitulo'
-import { obtenerRecientes, obtenerResumen } from '../services/comentarios'
+import { descartarPendiente, obtenerRecientes, obtenerResumen } from '../services/opiniones'
+import type { OpinionPendiente } from '../services/types'
 import { NotFoundPage } from './NotFoundPage'
 
-function Resumen({ categoria }: { categoria: Categoria }) {
-  const { datos, cargando, error, reintentar } = useAsync(`resumen:${categoria.id}`, () => obtenerResumen(categoria.id))
+function Resumen({ categoria, version }: { categoria: Categoria; version: number }) {
+  const { datos, cargando, error, reintentar } = useAsync(`resumen:${categoria.id}:${version}`, () =>
+    obtenerResumen(categoria.id),
+  )
 
   if (cargando) return <Esqueleto etiqueta="Cargando el resumen" lineas={2} />
   if (error) return <EstadoError mensaje={error.message} onReintentar={reintentar} />
@@ -34,14 +38,39 @@ function Resumen({ categoria }: { categoria: Categoria }) {
   )
 }
 
-function Recientes({ categoria, opinar }: { categoria: Categoria; opinar: string }) {
-  const { datos, cargando, error, reintentar } = useAsync(`recientes:${categoria.id}`, () =>
+function Pendientes({ pendientes }: { pendientes: OpinionPendiente[] }) {
+  if (pendientes.length === 0) return null
+  return (
+    <ul className="mb-3 space-y-3" aria-label="Tus opiniones sin enviar">
+      {pendientes.map((p) => (
+        <ComentarioItem
+          key={p.id}
+          comentario={{ ...p, id: `pendiente-${p.id}`, fecha: p.creado }}
+          estado={p.error ? 'No se pudo enviar' : 'Pendiente de envío'}
+        >
+          {p.error && (
+            <div className="mt-2">
+              <p className="font-bold text-rojo">{p.error}</p>
+              <button type="button" onClick={() => void descartarPendiente(p.id)} className="boton-borde mt-2">
+                Descartar
+              </button>
+            </div>
+          )}
+        </ComentarioItem>
+      ))}
+    </ul>
+  )
+}
+
+function Recientes({ categoria, opinar, version, hayPendientes }: { categoria: Categoria; opinar: string; version: number; hayPendientes: boolean }) {
+  const { datos, cargando, error, reintentar } = useAsync(`recientes:${categoria.id}:${version}`, () =>
     obtenerRecientes(categoria.id),
   )
 
   if (cargando) return <Esqueleto etiqueta="Cargando los comentarios" />
   if (error) return <EstadoError mensaje={error.message} onReintentar={reintentar} />
   if (!datos || datos.length === 0) {
+    if (hayPendientes) return null
     return (
       <EstadoVacio titulo="Todavía nadie opinó sobre este tema">
         <Link to={opinar} className="enlace">
@@ -62,10 +91,13 @@ function Recientes({ categoria, opinar }: { categoria: Categoria; opinar: string
 export function CategoriaPage() {
   const { id } = useParams()
   const categoria = buscarCategoria(id)
+  // Cuando la cola envía algo, `enviadas` cambia y los datos se vuelven a pedir
+  const { pendientes, enviadas } = useCola()
   useTitulo(categoria?.nombre ?? 'Página no encontrada')
 
   if (!categoria) return <NotFoundPage />
   const opinar = `/opinar?categoria=${categoria.id}`
+  const propios = pendientes.filter((p) => p.categoria === categoria.id)
 
   return (
     <div className="mx-auto max-w-3xl px-4 pt-8">
@@ -83,16 +115,21 @@ export function CategoriaPage() {
             <p className="text-adoquin">{categoria.descripcion}</p>
           </div>
         </div>
-        <Link to={opinar} className="boton-primario w-full sm:w-auto">
-          Opinar
-        </Link>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Link to={`/mapa?categoria=${categoria.id}`} className="boton-borde flex-1 sm:flex-none">
+            Ver mapa
+          </Link>
+          <Link to={opinar} className="boton-primario flex-1 sm:flex-none">
+            Opinar
+          </Link>
+        </div>
       </div>
 
       <section aria-labelledby="resumen" className="cartel mt-6 p-5">
         <h2 id="resumen" className="sr-only">
           Resumen de opiniones
         </h2>
-        <Resumen categoria={categoria} />
+        <Resumen categoria={categoria} version={enviadas} />
       </section>
 
       <section aria-labelledby="recientes" className="mt-8">
@@ -100,7 +137,8 @@ export function CategoriaPage() {
           Comentarios recientes
         </h2>
         <div className="mt-4">
-          <Recientes categoria={categoria} opinar={opinar} />
+          <Pendientes pendientes={propios} />
+          <Recientes categoria={categoria} opinar={opinar} version={enviadas} hayPendientes={propios.length > 0} />
         </div>
       </section>
     </div>

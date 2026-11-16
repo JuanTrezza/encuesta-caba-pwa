@@ -12,15 +12,22 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-voz-portena \"playwright test --config playwright.rules.config.ts\""
   },
   "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/rozha-one": "^5.3.0",
     "firebase": "^11.10.0",
+    "idb": "^8.0.4",
+    "leaflet": "^1.9.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.5"
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.18.5",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@firebase/rules-unit-testing": "^4.0.1",
     "@playwright/test": "^1.65.0",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -30,6 +37,9 @@
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
-    "vite": "^6.4.5"
+    "vite": "^6.4.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   }
 }

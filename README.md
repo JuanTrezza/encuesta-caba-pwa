@@ -10,7 +10,7 @@ Proyecto independiente, sin relación con el Gobierno de la Ciudad de Buenos Air
 
 ## Stack
 
-Vite, React 19, TypeScript strict, Tailwind CSS v3, React Router con `HashRouter`, Firebase JS SDK v11 (Auth y Firestore) y Playwright. Se publica en GitHub Pages con GitHub Actions.
+Vite, React 19, TypeScript strict, Tailwind CSS v3, React Router con `HashRouter`, Firebase JS SDK v11 (Auth y Firestore) y Playwright. Es una PWA (vite-plugin-pwa con Workbox), con mapa en Leaflet y gráficos en Recharts. Se publica en GitHub Pages con GitHub Actions.
 
 ## Desarrollo
 
@@ -26,10 +26,44 @@ La app corre en `http://localhost:5173/encuesta-caba-pwa/`.
 |---|---|
 | `npm run typecheck` | Corre `tsc` |
 | `npm run build` | Corre `tsc`, valida `VITE_FIREBASE_*` y genera `dist/`. Falla si la config está incompleta o tiene un formato inválido |
-| `npm run test:e2e` | Corre Playwright en 375 y 1440 px, con los services mockeados |
+| `npm run test:e2e` | Corre Playwright en 320, 375 y 1440 px, con los services mockeados |
 | `npm run test:rules` | Prueba las reglas de Firestore en el emulador. Requiere Java 21 o superior |
 
-Los tests no tocan Firebase: con `--mode e2e`, Vite reemplaza `src/services/auth.ts` y `src/services/comentarios.ts` por `tests/mocks/`. Las capturas quedan en `screenshots/`, que no se versiona. Si es la primera vez, instalá el navegador con `npx playwright install chromium`.
+Los tests no tocan Firebase: con `--mode e2e`, Vite reemplaza `src/services/auth.ts`, `src/services/comentarios.ts` y `src/services/pwa.ts` por `tests/mocks/`. La cola offline y el service worker que se prueban son los reales. Las capturas quedan en `screenshots/`, que no se versiona. Si es la primera vez, instalá el navegador con `npx playwright install chromium`.
+
+## PWA y uso sin conexión
+
+- **Instalación y actualización:** el sitio ofrece instalarse con un banner propio y avisa cuando hay una versión nueva. La versión nueva se activa recién al tocar "Actualizar".
+- **Service worker:** está en [src/sw.ts](src/sw.ts). Guarda todo el sitio en el dispositivo (unos 1,8 MB), incluidos el mapa y las tipografías, así que cualquier página abre sin conexión.
+- **Lectura sin conexión:** los comentarios ya vistos salen de la caché local de Firestore. Los promedios y conteos solo los calcula el servidor, así que se guarda el último valor recibido y se muestra ese.
+- **Escritura sin conexión:** la opinión queda en una cola en IndexedDB, figura como "Pendiente de envío" y se manda sola al volver la conexión. La fecha la pone el servidor al enviar, no al escribir.
+- **Sitio anterior:** quien todavía tenga su service worker pasa al nuevo sin hacer nada. `public/firebase-messaging-sw.js` existe solo para dar de baja el service worker de notificaciones del sitio anterior.
+
+## Mapa de barrios
+
+Los límites de los 48 barrios salen del conjunto de datos [Barrios](https://data.buenosaires.gob.ar/dataset/barrios) de Buenos Aires Data, publicado por la Secretaría de Innovación y Transformación Digital del GCBA con licencia [CC BY 2.5 AR](https://creativecommons.org/licenses/by/2.5/ar/). El archivo `public/barrios.geojson` es una versión modificada: coordenadas redondeadas a 4 decimales y nombres adaptados a los de este sitio. Se regenera con `node scripts/preparar-barrios.mjs`.
+
+Usar esos datos no implica ningún aval ni relación con el Gobierno de la Ciudad. El mapa no usa un mapa base de terceros: dibuja solo los barrios.
+
+## Resultados y costo de lecturas
+
+El mapa y la página de resultados usan agregados de Firestore (`count()` y `average()`), que no descargan los documentos. Cada agregado se cobra como una lectura por cada 1.000 entradas de índice recorridas.
+
+| Vista | Consultas agregadas |
+|---|---|
+| Resultados | Entre 73 y 85: 5 de distribución, 7 por tema, de 13 a 25 de evolución mensual y 48 de barrios |
+| Mapa | 48 por tema elegido |
+| Categoría | 5 |
+
+El resultado se guarda 5 minutos en memoria para no repetir las consultas al volver a la página. No hay un documento de resumen: mantenerlo exige un proceso con credenciales de servidor, y eso está fuera de esta etapa.
+
+## Notificaciones push (pendiente)
+
+No están implementadas. Para sumarlas hace falta:
+
+1. **Clave VAPID pública:** se genera en Firebase Console → Cloud Messaging → Web Push certificates. Es pública por diseño e iría en una variable `VITE_*`.
+2. **Permiso y token:** pedir permiso con `Notification.requestPermission()` después de un gesto de la persona, obtener el token con `getToken()` pasándole el registro del service worker actual, y guardar el token en Firestore con reglas propias. Para recibir, hay que manejar el evento `push` en `src/sw.ts`. En iOS solo funciona con la app instalada.
+3. **Quién envía:** la API de FCM exige una credencial de servidor, que nunca puede ir en el navegador. Las Cloud Functions necesitan el plan Blaze; el plan gratuito Spark no las incluye. Las alternativas son un servidor propio o una tarea programada, por ejemplo en GitHub Actions, con una service account guardada como secret.
 
 ## Seguridad
 
@@ -70,8 +104,10 @@ El emulador no exige índices compuestos, así que estos tests no comprueban que
 
 ## Estructura
 
-- `src/services/`: capa de datos. Las páginas no importan Firebase.
+- `src/services/`: capa de datos. Las páginas usan `opiniones.ts` y no importan Firebase.
+- `src/sw.ts`: service worker.
 - `src/pages/` y `src/components/`: interfaz.
-- `src/data/`: categorías y barrios.
+- `src/data/`: categorías, barrios y escala de colores del mapa.
+- `public/barrios.geojson`: límites de los barrios.
 - `legacy/`: sitio anterior. No se publica.
 - `docs/firebase-setup.md`: configuración de Firebase y GitHub.

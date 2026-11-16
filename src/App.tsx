@@ -8,9 +8,11 @@ import { IngresarPage } from './pages/IngresarPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SobrePage } from './pages/SobrePage'
 
-// Estas dos son las únicas que usan Firestore: así el SDK se descarga recién cuando hace falta
+// Las páginas que usan Firestore, Leaflet o Recharts se descargan recién cuando hacen falta
 const CategoriaPage = lazy(() => import('./pages/CategoriaPage').then((m) => ({ default: m.CategoriaPage })))
 const OpinarPage = lazy(() => import('./pages/OpinarPage').then((m) => ({ default: m.OpinarPage })))
+const MapaPage = lazy(() => import('./pages/MapaPage').then((m) => ({ default: m.MapaPage })))
+const ResultadosPage = lazy(() => import('./pages/ResultadosPage').then((m) => ({ default: m.ResultadosPage })))
 
 export function App() {
   return (
@@ -23,6 +25,8 @@ export function App() {
             <Route element={<RequireAuth />}>
               <Route path="opinar" element={<OpinarPage />} />
             </Route>
+            <Route path="mapa" element={<MapaPage />} />
+            <Route path="resultados" element={<ResultadosPage />} />
             <Route path="ingresar" element={<IngresarPage />} />
             <Route path="sobre" element={<SobrePage />} />
             <Route path="*" element={<NotFoundPage />} />
