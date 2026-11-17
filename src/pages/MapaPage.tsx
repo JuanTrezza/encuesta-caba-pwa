@@ -1,13 +1,14 @@
 import type { FeatureCollection } from 'geojson'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Actualizado } from '../components/Actualizado'
 import { EstadoError, Esqueleto } from '../components/Estados'
 import { formatearPromedio } from '../components/Estrellas'
 import { buscarCategoria, CATEGORIAS } from '../data/categorias'
 import { COLOR_SIN_DATOS, colorPorPromedio, ESCALA } from '../data/escala'
 import { useAsync } from '../hooks/useAsync'
 import { useTitulo } from '../hooks/useTitulo'
-import { obtenerBarrios } from '../services/opiniones'
+import { obtenerBarrios, pedirDatosNuevos } from '../services/opiniones'
 import { ErrorServicio, MINIMO_OPINIONES, type EstadisticaBarrio } from '../services/types'
 
 const MapaBarrios = lazy(() => import('../components/MapaBarrios'))
@@ -87,7 +88,14 @@ export function MapaPage() {
   useTitulo('Mapa de barrios')
   const [params, setParams] = useSearchParams()
   const categoria = buscarCategoria(params.get('categoria')) ?? CATEGORIAS[0]
-  const barrios = useAsync(`barrios:${categoria.id}`, () => obtenerBarrios(categoria.id))
+  const [version, setVersion] = useState(0)
+  const barrios = useAsync(`barrios:${categoria.id}:${version}`, () => obtenerBarrios(categoria.id))
+  const datos = barrios.datos?.valor
+
+  function actualizar() {
+    pedirDatosNuevos()
+    setVersion((v) => v + 1)
+  }
   const geo = useAsync('geo', cargarGeo)
 
   return (
@@ -116,20 +124,25 @@ export function MapaPage() {
         </select>
       </div>
 
+      {/* Alto reservado: cuando llega la fecha, el resto de la página no se mueve */}
+      <div className="mt-2 min-h-[44px]">
+        {barrios.datos && <Actualizado momento={barrios.datos.actualizado} onActualizar={actualizar} />}
+      </div>
+
       {barrios.cargando && (
-        <div className="mt-6">
+        <div className="mt-2">
           <Esqueleto etiqueta="Cargando los datos de los barrios" lineas={4} />
         </div>
       )}
       {barrios.error && (
-        <div className="mt-6">
+        <div className="mt-2">
           <EstadoError mensaje={barrios.error.message} onReintentar={barrios.reintentar} />
         </div>
       )}
 
-      {barrios.datos && (
+      {datos && (
         <>
-          <section aria-labelledby="titulo-mapa" className="mt-6">
+          <section aria-labelledby="titulo-mapa" className="mt-2">
             <h2 id="titulo-mapa" className="font-display text-2xl">
               {categoria.nombre} en el mapa
             </h2>
@@ -142,7 +155,7 @@ export function MapaPage() {
                 <EstadoError mensaje={geo.error.message} onReintentar={geo.reintentar} />
               ) : geo.datos ? (
                 <Suspense fallback={<Esqueleto etiqueta="Cargando el mapa" lineas={4} />}>
-                  <MapaBarrios geo={geo.datos} datos={barrios.datos} clave={categoria.id} />
+                  <MapaBarrios geo={geo.datos} datos={datos} clave={`${categoria.id}:${version}`} />
                 </Suspense>
               ) : (
                 <Esqueleto etiqueta="Cargando el mapa" lineas={4} />
@@ -155,7 +168,7 @@ export function MapaPage() {
             <h2 id="titulo-tabla" className="font-display text-2xl">
               {categoria.nombre} barrio por barrio
             </h2>
-            <Tabla datos={barrios.datos} tema={categoria.nombre} />
+            <Tabla datos={datos} tema={categoria.nombre} />
           </section>
         </>
       )}

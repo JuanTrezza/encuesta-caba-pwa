@@ -9,6 +9,10 @@ export interface EscenarioMock {
   envio?: 'ok' | 'error'
   /** Reflejo de lo publicado, para que los tests lo verifiquen */
   publicados?: unknown[]
+  /** Con 'error', borrar una opinión falla como si las reglas lo rechazaran */
+  borrado?: 'ok' | 'error'
+  /** Ids de las opiniones borradas, para que los tests lo verifiquen */
+  borrados?: string[]
   /** Registra el service worker real. Por defecto no, para que los tests no dependan de su caché. */
   sw?: boolean
   /** Simula que hay una versión nueva esperando */

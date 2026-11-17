@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { Cargando } from './Estados'
 
 export function RequireAuth() {
-  const { usuario, cargando } = useAuth()
+  const { usuario, cargando } = useAuth({ urgente: true })
   const { pathname, search } = useLocation()
 
   if (cargando) {

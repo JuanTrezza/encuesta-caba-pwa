@@ -27,6 +27,7 @@ import { CATEGORIAS } from '../src/data/categorias'
 import {
   consultarBarrios,
   consultarEvolucion,
+  consultarMisOpiniones,
   consultarPanorama,
   consultarRecientes,
   consultarResumen,
@@ -190,10 +191,34 @@ test.describe('editar y borrar', () => {
     await assertFails(updateDoc(doc(anonimo(), 'comentarios/propia'), { texto: 'cambiado' }))
   })
 
-  test('nadie puede borrar, tampoco quien la escribió', async () => {
-    await assertFails(deleteDoc(doc(logueado(), 'comentarios/propia')))
+  const existe = async () => (await getDoc(doc(anonimo(), 'comentarios/propia'))).exists()
+
+  test('quien la escribió puede borrarla', async () => {
+    await assertSucceeds(deleteDoc(doc(logueado(), 'comentarios/propia')))
+    expect(await existe()).toBe(false)
+  })
+
+  test('otra cuenta no puede borrarla', async () => {
     await assertFails(deleteDoc(doc(logueado('otra-persona'), 'comentarios/propia')))
+    expect(await existe()).toBe(true)
+  })
+
+  test('un anónimo no puede borrarla', async () => {
     await assertFails(deleteDoc(doc(anonimo(), 'comentarios/propia')))
+    expect(await existe()).toBe(true)
+  })
+
+  test('las opiniones viejas, sin uid, no las puede borrar nadie', async () => {
+    await sembrar('vieja', VIEJO)
+    for (const db of [anonimo(), logueado(), logueado('otra-persona')]) {
+      await assertFails(deleteDoc(doc(db, 'comentarios/vieja')))
+    }
+    expect((await getDoc(doc(anonimo(), 'comentarios/vieja'))).exists()).toBe(true)
+  })
+
+  test('quien la borró no puede volver a editarla ni borrarla', async () => {
+    await assertSucceeds(deleteDoc(doc(logueado(), 'comentarios/propia')))
+    await assertFails(updateDoc(doc(logueado(), 'comentarios/propia'), { texto: 'otra vez' }))
   })
 })
 
@@ -208,6 +233,8 @@ test.describe('leer', () => {
     for (const db of [anonimo(), logueado()]) {
       await assertFails(getDoc(doc(db, 'usuarios/uno')))
       await assertFails(setDoc(doc(db, 'usuarios/uno'), { a: 1 }))
+      await assertFails(deleteDoc(doc(db, 'usuarios/uno')))
+      await assertFails(deleteDoc(doc(db, 'comentarios/propia/respuestas/dos')))
       await assertFails(setDoc(doc(db, 'comentarios/uno/respuestas/dos'), { a: 1 }))
     }
   })
@@ -223,10 +250,12 @@ test.describe('compatibilidad con documentos viejos', () => {
     expect(normalizarFecha(null)).toBeNull()
   })
 
-  test('el comentario normalizado no expone el uid', () => {
-    const c = parsearComentario('a', { ...VIEJO, uid: UID, fecha: Timestamp.now() })
-    expect(c).not.toBeNull()
-    expect(c).not.toHaveProperty('uid')
+  test('el comentario normalizado conserva el uid de las nuevas y no inventa uno en las viejas', () => {
+    // La interfaz lo compara con el de la sesión para decidir si muestra "Borrar"
+    expect(parsearComentario('a', { ...VIEJO, uid: UID, fecha: Timestamp.now() })).toMatchObject({ uid: UID })
+    expect(parsearComentario('b', VIEJO)).not.toHaveProperty('uid')
+    expect(parsearComentario('c', { ...VIEJO, uid: '' })).not.toHaveProperty('uid')
+    expect(parsearComentario('d', { ...VIEJO, uid: 42 })).not.toHaveProperty('uid')
   })
 
   test('descarta lo que no se puede mostrar, sin romper', () => {
@@ -319,5 +348,51 @@ test.describe('agregados del mapa y de los resultados', () => {
     expect(barrios.find((b) => b.barrio === 'Boedo')).toEqual({ barrio: 'Boedo', total: 2, promedio: 4.5 })
     expect(barrios.find((b) => b.barrio === 'Almagro')).toEqual({ barrio: 'Almagro', total: 1, promedio: 1 })
     expect(barrios.filter((b) => b.total > 0)).toHaveLength(2)
+  })
+})
+
+test.describe('mis opiniones', () => {
+  const nueva = (uid: string, calificacion: number, fecha: Date, categoria = 'subte') => ({
+    uid,
+    texto: `Opinión de ${uid}`,
+    categoria,
+    calificacion,
+    fecha: Timestamp.fromDate(fecha),
+  })
+
+  test.beforeEach(async () => {
+    // Una opinión vieja, sin uid, y tres de la cuenta, en meses y temas distintos
+    await sembrar('vieja', { ...VIEJO, fecha: new Date(2025, 6, 17, 12).toISOString() })
+    await sembrar('a', nueva(UID, 5, new Date(2026, 9, 5, 12)))
+    await sembrar('b', nueva(UID, 3, new Date(2026, 7, 20, 12), 'limpieza'))
+    await sembrar('c', nueva(UID, 1, new Date(2026, 10, 2, 12), 'verdes'))
+    await sembrar('ajena', nueva('otra-persona', 4, new Date(2026, 10, 3, 12)))
+  })
+
+  test('trae solo las de la cuenta, de la más nueva a la más vieja', async () => {
+    const mias = await consultarMisOpiniones(base(logueado()), UID)
+    expect(mias.map((o) => o.id)).toEqual(['c', 'a', 'b'])
+    expect(mias.every((o) => o.uid === UID)).toBe(true)
+    expect(mias[0]).toMatchObject({ categoria: 'verdes', calificacion: 1, fecha: new Date(2026, 10, 2, 12).toISOString() })
+  })
+
+  test('respeta el límite', async () => {
+    const mias = await consultarMisOpiniones(base(logueado()), UID, 2)
+    expect(mias.map((o) => o.id)).toEqual(['c', 'a'])
+  })
+
+  test('una cuenta sin opiniones recibe una lista vacía', async () => {
+    expect(await consultarMisOpiniones(base(logueado('nueva')), 'nueva')).toEqual([])
+  })
+
+  test('la opinión borrada desaparece de la lista', async () => {
+    await assertSucceeds(deleteDoc(doc(logueado(), 'comentarios/a')))
+    const mias = await consultarMisOpiniones(base(logueado()), UID)
+    expect(mias.map((o) => o.id)).toEqual(['c', 'b'])
+  })
+
+  test('no se puede borrar una que figura en la lista de otra cuenta', async () => {
+    await assertFails(deleteDoc(doc(logueado(UID), 'comentarios/ajena')))
+    expect((await getDoc(doc(anonimo(), 'comentarios/ajena'))).exists()).toBe(true)
   })
 })

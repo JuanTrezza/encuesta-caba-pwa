@@ -17,6 +17,8 @@ Las reglas están en `firestore.rules` y los índices en `firestore.indexes.json
 
 Antes de desplegar, mirá las reglas publicadas en **Firestore → Rules**: el deploy las reemplaza por completo. Las reglas nuevas rechazan el formato de opinión del front anterior.
 
+Las reglas también permiten que cada persona **borre sus propias opiniones**: se compara el `uid` del documento con el de la sesión. Editar sigue prohibido, y las opiniones viejas, que no tienen `uid`, no las puede borrar nadie desde la app. Ese permiso solo suma: desplegar las reglas antes que el front no rompe nada, porque el botón "Borrar" existe recién en el front nuevo. En cambio, el **índice de "Mis opiniones" tiene que estar listo antes** de publicar el front.
+
 Conviene este orden, para que nadie vea errores en el medio:
 
 ```bash
@@ -51,8 +53,9 @@ Todos son de la colección `comentarios`, con alcance **Collection**.
 | `categoria` ASC, `calificacion` ASC | Promedio por tema, en Resultados |
 | `categoria` ASC, `barrio` ASC, `calificacion` ASC | Promedio por barrio, en Mapa y Resultados |
 | `fecha` ASC, `calificacion` ASC | Evolución mensual, en Resultados |
+| `uid` ASC, `fecha` DESC | Mis opiniones |
 
-Los tres últimos son para consultas con `average()`. La documentación de Firestore recomienda esa forma de índice, pero no aclara si es obligatoria en todos los casos. Si falta uno, la página muestra un error y la consola del navegador trae el link para crearlo; si alguno sobra, se puede borrar sin afectar al resto. Los conteos por estrellas solo usan igualdades y no necesitan índice compuesto.
+El último es obligatorio: "Mis opiniones" filtra por `uid` y ordena por `fecha`, y Firestore no resuelve eso sin un índice compuesto. Sin él, la página muestra un error. Los tres del medio son para consultas con `average()`. La documentación de Firestore recomienda esa forma de índice, pero no aclara si es obligatoria en todos los casos. Si falta uno, la página muestra un error y la consola del navegador trae el link para crearlo; si alguno sobra, se puede borrar sin afectar al resto. Los conteos por estrellas solo usan igualdades y no necesitan índice compuesto.
 
 Si ya creaste alguno desde el link de la consola, el deploy no lo duplica.
 

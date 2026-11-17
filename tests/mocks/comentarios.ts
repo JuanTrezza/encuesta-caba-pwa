@@ -26,6 +26,8 @@ async function preparar(): Promise<void> {
 
 /** Igual que en Firestore: los agregados solo los responde el servidor */
 async function prepararAgregado(): Promise<void> {
+  // Sobrevive a una recarga: los tests lo usan para saber si se volvió a consultar
+  sessionStorage.setItem('vp-consultas', String(Number(sessionStorage.getItem('vp-consultas') ?? 0) + 1))
   await preparar()
   if (!navigator.onLine) throw new ErrorServicio(SIN_RED, 'unavailable')
 }
@@ -35,17 +37,54 @@ export async function obtenerResumen(_categoria: CategoriaId): Promise<ResumenCa
   return escenario().datos === 'vacio' ? VACIO : RESUMEN
 }
 
+/** La cuenta de prueba de los tests (USUARIO en app.spec.ts) */
+const UID_PROPIO = 'u1'
+
+/** Opiniones que ya tenía esa cuenta antes de la sesión de prueba */
+const MIAS: Comentario[] = [
+  {
+    id: 'mia-1',
+    uid: UID_PROPIO,
+    texto: 'La escalera mecánica de la estación Pasco hace meses que no anda.',
+    calificacion: 2,
+    fecha: '2026-10-28T13:00:00.000Z',
+    categoria: 'subte',
+    barrio: 'Balvanera',
+  },
+  {
+    id: 'mia-2',
+    uid: UID_PROPIO,
+    texto: 'Faltan tachos de basura en la plaza.',
+    calificacion: 3,
+    fecha: '2026-09-02T10:00:00.000Z',
+    categoria: 'limpieza',
+  },
+]
+
+const estaBorrada = (id: string) => (escenario().borrados ?? []).includes(id)
+
+/** Lo que se publicó durante la sesión de prueba, con el uid de quien estaba ingresado */
+function publicadas(): Comentario[] {
+  const uid = escenario().usuario?.uid ?? UID_PROPIO
+  return ((escenario().publicados ?? []) as NuevoComentario[]).map((p, i) => ({
+    ...p,
+    uid,
+    id: `publicado-${i}`,
+    fecha: '2026-11-01T12:00:00.000Z',
+  }))
+}
+
 /** Igual que en Firestore con caché persistente: sin conexión devuelve lo que ya tenía */
 export async function obtenerRecientes(categoria: CategoriaId): Promise<Comentario[]> {
   await preparar()
   if (escenario().datos === 'vacio') return []
-  const publicados = ((escenario().publicados ?? []) as NuevoComentario[])
-    .filter((p) => p.categoria === categoria)
-    .map((p, i) => ({ ...p, id: `publicado-${i}`, fecha: '2026-11-01T12:00:00.000Z' }))
-  return [
+  const publicados = publicadas().filter((p) => p.categoria === categoria)
+  const lista: Comentario[] = [
     ...publicados,
     {
+      // Una opinión de la cuenta de prueba: la única de la lista que puede borrar
       id: 'nuevo',
+      uid: UID_PROPIO,
       texto: 'Pasan seguido, pero a la hora pico no se puede ni subir.',
       calificacion: 4,
       fecha: '2026-10-20T15:30:00.000Z',
@@ -68,6 +107,26 @@ export async function obtenerRecientes(categoria: CategoriaId): Promise<Comentar
       categoria,
     },
   ]
+  return lista.filter((comentario) => !estaBorrada(comentario.id))
+}
+
+/** Lo mismo que hace la consulta real: solo las de esa cuenta, de la más nueva a la más vieja */
+export async function obtenerMisOpiniones(uid: string): Promise<Comentario[]> {
+  await preparar()
+  if (escenario().datos === 'vacio') return []
+  return [...publicadas(), ...MIAS]
+    .filter((opinion) => opinion.uid === uid && !estaBorrada(opinion.id))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+}
+
+export async function borrarComentario(id: string): Promise<void> {
+  const e = escenario()
+  await esperar()
+  if (!navigator.onLine) throw new ErrorServicio('Estás sin conexión. No pudimos borrar tu opinión.', 'sin-conexion')
+  if (e.borrado === 'error') {
+    throw new ErrorServicio('No pudimos borrar esta opinión. Puede que ya no exista o que no sea tuya.', 'permission-denied')
+  }
+  ;(e.borrados ??= []).push(id)
 }
 
 export async function obtenerPanorama(): Promise<Panorama> {
@@ -111,5 +170,7 @@ export const contrato = {
   obtenerPanorama,
   obtenerEvolucion,
   obtenerBarrios,
+  obtenerMisOpiniones,
+  borrarComentario,
   publicarComentario,
 } satisfies typeof Real

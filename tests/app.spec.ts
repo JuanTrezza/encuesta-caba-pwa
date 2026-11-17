@@ -11,6 +11,7 @@ interface Escenario {
   datos?: 'ok' | 'vacio' | 'error' | 'lento'
   errorUnaVez?: boolean
   envio?: 'ok' | 'error'
+  borrado?: 'ok' | 'error'
   sw?: boolean
   actualizacion?: boolean
 }
@@ -43,10 +44,17 @@ async function abrir(page: Page, ruta: string, escenario: Escenario = {}) {
   await page.goto(`./#${ruta}`)
 }
 
-/** En pantallas angostas la navegación está dentro del menú */
-async function abrirMenuSiHay(page: Page) {
-  const boton = page.getByRole('button', { name: 'Abrir el menú' })
-  if (await boton.isVisible()) await boton.click()
+/** En pantallas angostas la cuenta está dentro del panel del menú; en las anchas, en el botón "Mi cuenta" */
+async function abrirMenuCuenta(page: Page) {
+  const hamburguesa = page.getByRole('button', { name: 'Abrir el menú' })
+  if (await hamburguesa.isVisible()) await hamburguesa.click()
+  else await page.getByRole('button', { name: 'Mi cuenta' }).click()
+}
+
+async function irAMisOpiniones(page: Page) {
+  await abrirMenuCuenta(page)
+  // Solo uno de los dos existe según el ancho. Se acota al menú porque otras páginas también enlazan a Mis opiniones.
+  await page.locator('#menu-cuenta, [role="dialog"]').getByRole('link', { name: 'Mis opiniones' }).click()
 }
 
 /** Textos visibles que ocupan más de una línea o se salen de la pantalla */
@@ -90,7 +98,8 @@ async function comprobarPagina(page: Page, nombre: string, proyecto: string) {
 
   mkdirSync('screenshots', { recursive: true })
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: `screenshots/${proyecto}-${nombre}.png`, fullPage: true })
+  // Las animaciones se llevan a su estado final: la captura no depende del momento
+  await page.screenshot({ path: `screenshots/${proyecto}-${nombre}.png`, fullPage: true, animations: 'disabled' })
 }
 
 test.describe('recorrido de páginas', () => {
@@ -133,6 +142,20 @@ test.describe('recorrido de páginas', () => {
   test('sobre el proyecto', async ({ page }, info) => {
     await abrir(page, '/sobre')
     await expect(page.getByRole('heading', { level: 1, name: 'Sobre el proyecto' })).toBeVisible()
+    const principal = page.locator('main')
+    await expect(principal).toContainText('no es del Gobierno de la Ciudad de Buenos Aires')
+    await expect(principal).toContainText('Tu nombre y tu mail no se guardan en la opinión.')
+    await expect(principal).toContainText('un código de tu cuenta')
+    // Cada persona borra lo suyo, y las opiniones viejas se piden por GitHub
+    await expect(page.getByRole('heading', { level: 2, name: 'Cómo borrar una opinión' })).toBeVisible()
+    await expect(principal).toContainText('Cada persona borra lo suyo.')
+    await expect(principal).toContainText('abrí Mis opiniones desde el menú de tu cuenta')
+    await expect(principal).toContainText('Las opiniones viejas, de antes de que el sitio guardara el código de cuenta')
+    await expect(principal).not.toContainText('Las opiniones no se pueden editar ni borrar')
+    await expect(page.getByRole('link', { name: /la página del proyecto en GitHub/ })).toHaveAttribute(
+      'href',
+      'https://github.com/JuanTrezza/encuesta-caba-pwa/issues/new',
+    )
     await comprobarPagina(page, 'sobre', info.project.name)
   })
 
@@ -287,7 +310,7 @@ test.describe('cuenta', () => {
     await page.getByLabel('Mail').fill('ok@example.com')
     await page.getByLabel('Contraseña').press('Enter')
     await expect(page.getByRole('heading', { level: 1 })).toContainText('¿Cómo anda tu barrio?')
-    await abrirMenuSiHay(page)
+    await abrirMenuCuenta(page)
     await expect(page.getByRole('button', { name: 'Salir' })).toBeVisible()
   })
 
@@ -301,7 +324,7 @@ test.describe('cuenta', () => {
     await page.getByLabel('Mail').fill('nueva@example.com')
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('¿Cómo anda tu barrio?')
-    await abrirMenuSiHay(page)
+    await abrirMenuCuenta(page)
     await page.getByRole('button', { name: 'Salir' }).click()
     await expect(page.getByRole('link', { name: 'Ingresar' })).toBeVisible()
   })
@@ -411,23 +434,52 @@ test.describe('mapa', () => {
 })
 
 test.describe('resultados', () => {
-  test('muestra promedios, gráficos, evolución y rankings de barrios', async ({ page }, info) => {
+  test('muestra promedios, gráficos accesibles, evolución y rankings de barrios', async ({ page }, info) => {
     await abrir(page, '/resultados')
     await expect(page.getByText('128 opiniones')).toBeVisible()
-    await expect(page.getByRole('list', { name: 'Distribución de estrellas' }).getByRole('listitem')).toHaveCount(5)
-    await expect(page.locator('svg.recharts-surface')).toHaveCount(2)
+
+    // Tres gráficos SVG propios, cada uno con su resumen para lectores de pantalla
+    const distribucion = page.getByRole('img', { name: /^Distribución de estrellas sobre 128 opiniones: 5 estrellas, 53%/ })
+    const temas = page.getByRole('img', { name: /El más alto es Accesibilidad, con 4,8\. El más bajo es Limpieza, con 2,4\./ })
+    const evolucion = page.getByRole('img', { name: /Último mes con opiniones: noviembre de 2026, con 3,2\./ })
+    await expect(distribucion.locator('[data-barra]')).toHaveCount(5)
     // 6 barras: el tema sin opiniones no se grafica
-    await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(6)
+    await expect(temas.locator('[data-barra]')).toHaveCount(6)
+    // Dos meses sin opiniones: 10 puntos y la línea cortada en dos tramos
+    await expect(evolucion.locator('[data-punto]')).toHaveCount(10)
+    await expect(evolucion.locator('[data-tramo]')).toHaveCount(2)
+    expect(await page.locator('script[src*="recharts"], .recharts-surface').count()).toBe(0)
 
-    await page.getByText('Ver los promedios por tema en una tabla').click()
-    const temas = page.getByRole('table').first().locator('tbody tr')
-    await expect(temas).toHaveCount(7)
-    await expect(temas.filter({ hasText: 'Eventos Gratuitos' })).toContainText('Sin opiniones')
+    // Los rótulos van en el propio gráfico y no se salen del ancho
+    await expect(temas).toContainText('Accesibilidad')
+    await expect(distribucion).toContainText('68 (53%)')
+    const desbordes = await page.locator('svg[role="img"]').evaluateAll((graficos) =>
+      graficos.flatMap((svg) => {
+        const caja = svg.getBoundingClientRect()
+        return [...svg.querySelectorAll('text')]
+          .filter((texto) => texto.getBoundingClientRect().right > caja.right + 1 || texto.getBoundingClientRect().left < caja.left - 1)
+          .map((texto) => texto.textContent)
+      }),
+    )
+    expect(desbordes).toEqual([])
 
-    await page.getByText('Ver la evolución mensual en una tabla').click()
-    const meses = page.getByRole('table').nth(1).locator('tbody tr')
-    await expect(meses).toHaveCount(12)
-    await expect(meses.filter({ hasText: 'Sin opiniones' })).toHaveCount(2)
+    // Cada gráfico tiene su tabla, que se abre con "Ver datos"
+    const botones = page.getByRole('button', { name: /^Ver datos/ })
+    await expect(botones).toHaveCount(3)
+    await expect(page.getByRole('table')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Ver datos: promedio por tema' }).click()
+    const tablaTemas = page.getByRole('table')
+    await expect(tablaTemas.locator('tbody tr')).toHaveCount(7)
+    await expect(tablaTemas.locator('tbody tr').filter({ hasText: 'Eventos Gratuitos' })).toContainText('Sin opiniones')
+    await expect(page.getByRole('button', { name: 'Ocultar datos: promedio por tema' })).toHaveAttribute('aria-expanded', 'true')
+    await page.getByRole('button', { name: 'Ocultar datos: promedio por tema' }).click()
+    await expect(page.getByRole('table')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Ver datos: evolución mensual' }).click()
+    await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12)
+    await expect(page.getByRole('table').locator('tbody tr').filter({ hasText: 'Sin opiniones' })).toHaveCount(2)
+    await page.getByRole('button', { name: 'Ver datos: distribución de estrellas' }).click()
+    await expect(page.getByRole('table').first().locator('tbody tr')).toHaveCount(5)
 
     const mejores = page.locator('div', { has: page.getByRole('heading', { name: 'Mejor puntuados' }) }).last().getByRole('listitem')
     const peores = page.locator('div', { has: page.getByRole('heading', { name: 'Peor puntuados' }) }).last().getByRole('listitem')
@@ -436,6 +488,99 @@ test.describe('resultados', () => {
     await expect(mejores.first()).toContainText('5,0')
     await expect(peores.first()).toContainText('1,0')
     await comprobarPagina(page, 'resultados', info.project.name)
+  })
+
+  test('los gráficos se animan solo si no se pidió reducir el movimiento', async ({ page }) => {
+    const animaciones = () =>
+      page.evaluate(() =>
+        ['[data-barra]', '[data-tramo]', '[data-punto]'].map((selector) => {
+          const elemento = document.querySelector(selector)
+          return elemento ? getComputedStyle(elemento).animationName : 'falta'
+        }),
+      )
+
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await abrir(page, '/resultados')
+    await expect(page.locator('[data-tramo]').first()).toBeVisible()
+    expect(await animaciones()).toEqual(['crecer', 'trazar', 'aparecer'])
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    expect(await animaciones()).toEqual(['none', 'none', 'none'])
+    // Sin animación, la línea se dibuja entera
+    expect(await page.locator('[data-tramo]').first().evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe('none')
+  })
+
+  test('al pasar el cursor o tocar un gráfico se ven los datos de ese punto', async ({ page }) => {
+    await abrir(page, '/resultados')
+    const temas = page.getByRole('img', { name: /Promedio de estrellas por tema/ })
+    await temas.locator('[data-barra]').nth(3).hover()
+    await expect(page.locator('main')).toContainText('Promedio 4,0 · 26 opiniones')
+    const evolucion = page.getByRole('img', { name: /Promedio de estrellas por mes/ })
+    await evolucion.locator('[data-punto]').last().hover()
+    await expect(page.locator('main')).toContainText('Promedio 3,2 · 26 opiniones')
+  })
+
+  test('una recarga no repite las consultas; "Actualizar" sí', async ({ page }) => {
+    const consultas = () => page.evaluate(() => Number(sessionStorage.getItem('vp-consultas') ?? 0))
+    await abrir(page, '/resultados')
+    await expect(page.getByText('Actualizado hace menos de 1 min.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Mejor puntuados' })).toBeVisible()
+    // Panorama, evolución y barrios: una consulta del mock por cada una
+    expect(await consultas()).toBe(3)
+
+    await page.reload()
+    await expect(page.getByText('128 opiniones')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Mejor puntuados' })).toBeVisible()
+    expect(await consultas()).toBe(3)
+
+    // El mapa del mismo tema usa lo que ya está guardado
+    await page.goto('./#/mapa?categoria=limpieza')
+    await expect(page.locator('path.leaflet-interactive')).toHaveCount(48)
+    await expect(page.getByText(/^Actualizado hace/)).toBeVisible()
+    expect(await consultas()).toBe(3)
+
+    await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
+    await expect(page.locator('path.leaflet-interactive')).toHaveCount(48)
+    expect(await consultas()).toBe(4)
+  })
+
+  test('lo guardado vence a los 30 minutos, pero sirve de respaldo sin conexión', async ({ page, context }) => {
+    const consultas = () => page.evaluate(() => Number(sessionStorage.getItem('vp-consultas') ?? 0))
+    await abrir(page, '/categoria/subte')
+    await expect(page.getByText('Actualizado hace menos de 1 min.')).toBeVisible()
+    expect(await consultas()).toBe(1)
+
+    // Envejece 45 minutos lo guardado en IndexedDB
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolver, rechazar) => {
+          const pedido = indexedDB.open('voz-portena')
+          pedido.onerror = () => rechazar(pedido.error)
+          pedido.onsuccess = () => {
+            const tx = pedido.result.transaction('agregados', 'readwrite')
+            const almacen = tx.objectStore('agregados')
+            const todos = almacen.getAll()
+            todos.onsuccess = () => {
+              for (const fila of todos.result as { momento: number }[]) almacen.put({ ...fila, momento: fila.momento - 45 * 60_000 })
+            }
+            tx.oncomplete = () => {
+              pedido.result.close()
+              resolver()
+            }
+          }
+        }),
+    )
+
+    // Sin conexión no se puede renovar: se muestra lo guardado, con su antigüedad real
+    await context.setOffline(true)
+    await page.goto('./#/sobre')
+    await page.goBack()
+    await expect(page.getByText('128 opiniones')).toBeVisible()
+    await context.setOffline(false)
+
+    await page.reload()
+    await expect(page.getByText('Actualizado hace menos de 1 min.')).toBeVisible()
+    expect(await consultas()).toBeGreaterThan(1)
   })
 
   test('vacío', async ({ page }, info) => {
@@ -652,5 +797,234 @@ test.describe('PWA', () => {
     // Antes de activarse, el service worker descarga todo el precache
     await expect.poll(estado, { timeout: 25_000 }).toEqual({ cacheVieja: false, controlada: true })
     await expect(page.getByRole('heading', { level: 1 })).toContainText('¿Cómo anda tu barrio?')
+  })
+})
+
+test.describe('borrar opiniones', () => {
+  const botonesBorrar = (page: Page) => page.getByRole('button', { name: /^Borrar mi opinión/ })
+  const consultas = (page: Page) => page.evaluate(() => Number(sessionStorage.getItem('vp-consultas') ?? 0))
+  const borrados = (page: Page) => page.evaluate(() => window.__VP_MOCK__?.borrados ?? [])
+  // De las tres opiniones de la lista, la de la cuenta de prueba es la única que puede borrar
+  const propia = (page: Page) => page.locator('li', { hasText: 'Pasan seguido, pero a la hora pico' })
+
+  test('solo ofrece borrar las opiniones propias, no las viejas ni las de otras cuentas', async ({ page }) => {
+    await abrir(page, '/categoria/transporte', { usuario: USUARIO })
+    await expect(page.getByText('Villa General Mitre')).toBeVisible()
+    await expect(propia(page).getByRole('button', { name: /^Borrar mi opinión del \d+ de octubre de 2026/ })).toBeVisible()
+    await expect(botonesBorrar(page)).toHaveCount(1)
+    await expect(page.locator('li', { hasText: 'Comentario guardado por la app anterior.' }).getByRole('button')).toHaveCount(0)
+    await expect(page.locator('li', { hasText: 'Unapalabramuylarga' }).getByRole('button')).toHaveCount(0)
+  })
+
+  test('otra cuenta no ve el botón en la opinión de la cuenta de prueba', async ({ page }) => {
+    await abrir(page, '/categoria/transporte', { usuario: { uid: 'otra-cuenta', email: 'otra@example.com', nombre: 'Otra' } })
+    await expect(page.getByText('Villa General Mitre')).toBeVisible()
+    // Una vez que se sabe quién ingresó, el menú de la cuenta lo muestra
+    await abrirMenuCuenta(page)
+    await expect(page.getByRole('button', { name: 'Salir' })).toBeVisible()
+    await expect(botonesBorrar(page)).toHaveCount(0)
+  })
+
+  test('sin sesión no aparece ningún botón', async ({ page }) => {
+    await abrir(page, '/categoria/transporte')
+    await expect(page.getByText('Villa General Mitre')).toBeVisible()
+    // Tocar la página hace que se averigüe enseguida si hay sesión
+    await page.locator('h1').click()
+    await page.waitForTimeout(400)
+    await expect(botonesBorrar(page)).toHaveCount(0)
+  })
+
+  test('pide confirmación, se puede cancelar, y al confirmar borra, avisa y renueva el resumen', async ({ page }, info) => {
+    await abrir(page, '/categoria/transporte', { usuario: USUARIO })
+    await expect(page.getByText('128 opiniones')).toBeVisible()
+    const borrar = propia(page).getByRole('button', { name: /^Borrar mi opinión/ })
+    await borrar.click()
+
+    // La confirmación aparece en el mismo lugar, con el foco en la opción segura
+    const confirmacion = propia(page).getByRole('group', { name: '¿Borrar esta opinión? No se puede deshacer.' })
+    await expect(confirmacion).toBeVisible()
+    await expect(confirmacion.getByRole('button', { name: 'Cancelar' })).toBeFocused()
+    await comprobarPagina(page, 'categoria-confirmar-borrado', info.project.name)
+
+    // Escape cancela y devuelve el foco al botón
+    await page.keyboard.press('Escape')
+    await expect(confirmacion).toBeHidden()
+    await expect(borrar).toBeFocused()
+    // Cancelar con el botón hace lo mismo
+    await borrar.click()
+    await confirmacion.getByRole('button', { name: 'Cancelar' }).click()
+    await expect(confirmacion).toBeHidden()
+    await expect(borrar).toBeFocused()
+    expect(await borrados(page)).toEqual([])
+
+    const antes = await consultas(page)
+    await borrar.click()
+    await confirmacion.getByRole('button', { name: 'Sí, borrar' }).click()
+    await expect(page.getByText('Opinión borrada.')).toBeVisible()
+    await expect(propia(page)).toHaveCount(0)
+    // El botón que tenía el foco desapareció: el foco queda en el título de la lista
+    await expect(page.getByRole('heading', { level: 2, name: 'Comentarios recientes' })).toBeFocused()
+    expect(await borrados(page)).toEqual(['nuevo'])
+    // Cambió el total y el promedio: el resumen se vuelve a pedir
+    await expect.poll(() => consultas(page)).toBeGreaterThan(antes)
+    // Las demás opiniones siguen y ninguna tiene el botón
+    await expect(page.getByText('Comentario guardado por la app anterior.')).toBeVisible()
+    await expect(botonesBorrar(page)).toHaveCount(0)
+  })
+
+  test('si el borrado falla lo avisa, la opinión queda y el foco vuelve al botón', async ({ page }) => {
+    await abrir(page, '/categoria/transporte', { usuario: USUARIO, borrado: 'error' })
+    await expect(page.getByText('128 opiniones')).toBeVisible()
+    await propia(page).getByRole('button', { name: /^Borrar mi opinión/ }).click()
+    await propia(page).getByRole('button', { name: 'Sí, borrar' }).click()
+    await expect(propia(page).getByRole('alert')).toContainText('No pudimos borrar esta opinión. Puede que ya no exista o que no sea tuya.')
+    await expect(propia(page).getByRole('button', { name: /^Borrar mi opinión/ })).toBeFocused()
+    expect(await borrados(page)).toEqual([])
+  })
+
+  test('sin conexión no se puede borrar, y lo dice', async ({ page, context }) => {
+    await abrir(page, '/categoria/transporte', { usuario: USUARIO })
+    await expect(propia(page).getByRole('button', { name: /^Borrar mi opinión/ })).toBeVisible()
+    await context.setOffline(true)
+    await propia(page).getByRole('button', { name: /^Borrar mi opinión/ }).click()
+    await propia(page).getByRole('button', { name: 'Sí, borrar' }).click()
+    await expect(propia(page).getByRole('alert')).toContainText('Estás sin conexión. No pudimos borrar tu opinión.')
+    expect(await borrados(page)).toEqual([])
+    await context.setOffline(false)
+  })
+})
+
+test.describe('mis opiniones', () => {
+  const lista = (page: Page) => page.getByRole('list', { name: 'Tus opiniones publicadas' })
+  const borrados = (page: Page) => page.evaluate(() => window.__VP_MOCK__?.borrados ?? [])
+
+  test('sin sesión pide ingresar y después vuelve a la página', async ({ page }) => {
+    await abrir(page, '/mis-opiniones')
+    await expect(page.getByRole('heading', { level: 1, name: 'Ingresar' })).toBeVisible()
+    await page.getByRole('button', { name: 'Continuar con Google' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis opiniones' })).toBeVisible()
+    // La cuenta de Google de prueba (uid google-1) todavía no opinó
+    await expect(page.getByText('Todavía no publicaste ninguna opinión')).toBeVisible()
+  })
+
+  test('lista las opiniones de la cuenta, de la más nueva a la más vieja', async ({ page }, info) => {
+    await abrir(page, '/mis-opiniones', { usuario: USUARIO })
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis opiniones' })).toBeVisible()
+    await expect(lista(page).getByRole('listitem')).toHaveCount(2)
+    await expect(page.getByText('Tenés 2 opiniones publicadas.')).toBeVisible()
+    const primera = lista(page).getByRole('listitem').first()
+    await expect(primera).toContainText('La escalera mecánica de la estación Pasco')
+    await expect(primera.getByRole('link', { name: 'Subte' })).toHaveAttribute('href', '#/categoria/subte')
+    await expect(lista(page).getByRole('listitem').last()).toContainText('Faltan tachos de basura en la plaza.')
+    await expect(lista(page).getByRole('button', { name: /^Borrar mi opinión/ })).toHaveCount(2)
+    await comprobarPagina(page, 'mis-opiniones', info.project.name)
+  })
+
+  test('borra una por una, avisa cada vez y termina en el estado vacío', async ({ page }, info) => {
+    await abrir(page, '/mis-opiniones', { usuario: USUARIO })
+    const primera = lista(page).getByRole('listitem').first()
+    await primera.getByRole('button', { name: /^Borrar mi opinión/ }).click()
+    await primera.getByRole('button', { name: 'Sí, borrar' }).click()
+    await expect(page.getByText('Opinión borrada.')).toBeVisible()
+    await expect(lista(page).getByRole('listitem')).toHaveCount(1)
+    await expect(page.getByText('Tenés 1 opinión publicada.')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Opiniones publicadas' })).toBeFocused()
+    expect(await borrados(page)).toEqual(['mia-1'])
+
+    await lista(page).getByRole('button', { name: /^Borrar mi opinión/ }).click()
+    await lista(page).getByRole('button', { name: 'Sí, borrar' }).click()
+    await expect(page.getByText('Todavía no publicaste ninguna opinión')).toBeVisible()
+    await expect(page.getByText('Opinión borrada.')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Opiniones publicadas' })).toBeFocused()
+    expect(await borrados(page)).toEqual(['mia-1', 'mia-2'])
+    await comprobarPagina(page, 'mis-opiniones-vacio', info.project.name)
+  })
+
+  test('un error al cargar se puede reintentar', async ({ page }) => {
+    await abrir(page, '/mis-opiniones', { usuario: USUARIO, errorUnaVez: true })
+    await expect(page.getByRole('alert')).toBeVisible()
+    await page.evaluate(() => {
+      window.__VP_MOCK__!.errorUnaVez = false
+    })
+    await page.getByRole('button', { name: 'Reintentar' }).click()
+    await expect(lista(page).getByRole('listitem')).toHaveCount(2)
+  })
+
+  test('una opinión recién publicada aparece en la lista, y se llega desde el menú de la cuenta', async ({ page }) => {
+    await abrir(page, '/opinar?categoria=seguridad', { usuario: USUARIO })
+    await page.locator('label', { hasText: '4 estrellas' }).click()
+    await page.getByLabel(/^Tu comentario/).fill('Mejoró la iluminación de la plaza.')
+    await page.getByRole('button', { name: 'Enviar opinión' }).click()
+    await expect(page.locator('main').getByRole('status')).toContainText('¡Gracias!')
+
+    await irAMisOpiniones(page)
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis opiniones' })).toBeVisible()
+    await expect(lista(page).getByRole('listitem')).toHaveCount(3)
+    await expect(lista(page).getByRole('listitem').first()).toContainText('Mejoró la iluminación de la plaza.')
+    await expect(lista(page).getByRole('listitem').first().getByRole('link', { name: 'Seguridad' })).toBeVisible()
+  })
+})
+
+test.describe('menú de la cuenta', () => {
+  test('en pantallas anchas abre un panel con Mis opiniones y Salir, y se cierra de todas las formas', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop-1440', 'En pantallas angostas la cuenta está en el panel del menú')
+    await abrir(page, '/', { usuario: USUARIO })
+    const boton = page.getByRole('button', { name: 'Mi cuenta' })
+    await expect(boton).toHaveAttribute('aria-expanded', 'false')
+    await boton.click()
+    await expect(boton).toHaveAttribute('aria-expanded', 'true')
+    const menu = page.locator('#menu-cuenta')
+    await expect(menu).toContainText('Vecina')
+    await expect(menu.getByRole('link', { name: 'Mis opiniones' })).toHaveAttribute('href', '#/mis-opiniones')
+    await expect(menu.getByRole('button', { name: 'Salir' })).toBeVisible()
+    expect(await textosCortados(page, 'header')).toEqual([])
+
+    // Escape cierra y devuelve el foco al botón
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(boton).toBeFocused()
+
+    // Tocar afuera cierra
+    await boton.click()
+    await page.locator('h1').click()
+    await expect(menu).toBeHidden()
+
+    // Llevar el foco afuera con Tab cierra: el primer Tab va a "Mis opiniones", el segundo a "Salir" y el tercero sale
+    await boton.click()
+    await page.keyboard.press('Tab')
+    await expect(menu.getByRole('link', { name: 'Mis opiniones' })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(menu.getByRole('button', { name: 'Salir' })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(menu).toBeHidden()
+
+    // Elegir "Mis opiniones" navega y cierra
+    await boton.click()
+    await menu.getByRole('link', { name: 'Mis opiniones' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis opiniones' })).toBeVisible()
+    await expect(menu).toBeHidden()
+  })
+
+  test('en pantallas angostas el panel suma Mis opiniones y Salir, sin cortar ningún texto', async ({ page }, info) => {
+    test.skip(info.project.name === 'desktop-1440', 'En pantallas anchas la cuenta tiene su propio botón')
+    await abrir(page, '/', { usuario: USUARIO })
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
+    const panel = page.getByRole('dialog', { name: 'Menú' })
+    await expect(panel.getByRole('link')).toHaveText(['Inicio', 'Mapa', 'Resultados', 'Sobre el proyecto', 'Mis opiniones'])
+    await expect(panel).toContainText('Vecina')
+    await expect(panel.getByRole('button', { name: 'Salir' })).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(await textosCortados(page, '[role="dialog"]')).toEqual([])
+    if (info.project.name === 'mobile-320') await page.screenshot({ path: 'screenshots/mobile-320-menu-con-sesion.png' })
+
+    // El foco da la vuelta dentro del panel: de "Salir" vuelve al botón de cerrar
+    await panel.getByRole('button', { name: 'Salir' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(panel.getByRole('button', { name: 'Cerrar el menú' })).toBeFocused()
+
+    // Elegir "Mis opiniones" navega y cierra el panel
+    await panel.getByRole('link', { name: 'Mis opiniones' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis opiniones' })).toBeVisible()
+    await expect(panel).toBeHidden()
   })
 })

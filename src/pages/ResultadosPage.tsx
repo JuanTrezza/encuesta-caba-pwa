@@ -1,19 +1,24 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Distribucion } from '../components/Distribucion'
+import { Actualizado } from '../components/Actualizado'
 import { EstadoError, EstadoVacio, Esqueleto } from '../components/Estados'
 import { Estrellas, formatearPromedio } from '../components/Estrellas'
+import { Figura, GraficoBarras, GraficoLinea } from '../components/Graficos'
 import { buscarCategoria, CATEGORIAS, type CategoriaId } from '../data/categorias'
 import { useAsync } from '../hooks/useAsync'
 import { useTitulo } from '../hooks/useTitulo'
-import { obtenerBarrios, obtenerEvolucion, obtenerPanorama } from '../services/opiniones'
-import { MINIMO_OPINIONES, type EstadisticaBarrio, type Panorama, type PuntoMensual } from '../services/types'
-
-const GraficoTemas = lazy(() => import('../components/Graficos').then((m) => ({ default: m.GraficoTemas })))
-const GraficoEvolucion = lazy(() => import('../components/Graficos').then((m) => ({ default: m.GraficoEvolucion })))
+import { obtenerBarrios, obtenerEvolucion, obtenerPanorama, pedirDatosNuevos } from '../services/opiniones'
+import {
+  MINIMO_OPINIONES,
+  type Calificacion,
+  type EstadisticaBarrio,
+  type Panorama,
+  type PuntoMensual,
+} from '../services/types'
 
 const FORMATO_MES = new Intl.DateTimeFormat('es-AR', { month: 'short', year: '2-digit' })
 const FORMATO_MES_LARGO = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' })
+const ESTRELLAS: readonly Calificacion[] = [5, 4, 3, 2, 1]
 
 function fechaDelMes(mes: string): Date {
   const [anio = '1970', numero = '1'] = mes.split('-')
@@ -21,6 +26,7 @@ function fechaDelMes(mes: string): Date {
 }
 
 const opiniones = (n: number) => `${n.toLocaleString('es-AR')} ${n === 1 ? 'opinión' : 'opiniones'}`
+const estrellas = (n: number) => `${n} ${n === 1 ? 'estrella' : 'estrellas'}`
 
 function Seccion({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -33,21 +39,31 @@ function Seccion({ id, titulo, children }: { id: string; titulo: string; childre
   )
 }
 
-function TablaDatos({ resumen, children }: { resumen: string; children: ReactNode }) {
+function Encabezado({ columnas }: { columnas: [string, string, string] }) {
   return (
-    <details className="mt-3">
-      <summary className="enlace min-h-[44px] cursor-pointer py-2">{resumen}</summary>
-      <div className="overflow-x-auto">
-        <table className="mt-2 w-full text-left">{children}</table>
-      </div>
-    </details>
+    <thead>
+      <tr className="border-b-2 border-tinta">
+        <th scope="col" className="py-2 pr-2">{columnas[0]}</th>
+        <th scope="col" className="py-2 pr-2">{columnas[1]}</th>
+        <th scope="col" className="whitespace-nowrap py-2 pl-2 text-right">{columnas[2]}</th>
+      </tr>
+    </thead>
   )
 }
 
 function General({ panorama }: { panorama: Panorama }) {
   const { general } = panorama
+  const filas = ESTRELLAS.map((n) => {
+    const cantidad = general.distribucion[n]
+    const porcentaje = general.total ? Math.round((cantidad / general.total) * 100) : 0
+    return { n, cantidad, porcentaje }
+  })
+  const resumen = `Distribución de estrellas sobre ${opiniones(general.total)}: ${filas
+    .map((f) => `${estrellas(f.n)}, ${f.porcentaje}%`)
+    .join('; ')}.`
+
   return (
-    <div className="cartel grid gap-6 p-5 md:grid-cols-[auto_1fr] md:items-center md:gap-10">
+    <div className="cartel grid gap-6 p-5 md:grid-cols-[auto_1fr] md:items-start md:gap-10">
       <div>
         <p className="font-display text-6xl leading-none">{formatearPromedio(general.promedio)}</p>
         <div className="mt-2">
@@ -55,75 +71,135 @@ function General({ panorama }: { panorama: Panorama }) {
         </div>
         <p className="mt-1 text-adoquin">{opiniones(general.total)}</p>
       </div>
-      <Distribucion resumen={general} />
+      <Figura
+        titulo="distribución de estrellas"
+        tabla={
+          <>
+            <caption className="sr-only">Cantidad de opiniones por puntuación</caption>
+            <Encabezado columnas={['Puntuación', 'Opiniones', 'Porcentaje']} />
+            <tbody>
+              {filas.map((f) => (
+                <tr key={f.n} className="border-b border-piedra">
+                  <th scope="row" className="py-2 pr-2 font-normal">{estrellas(f.n)}</th>
+                  <td className="py-2 pr-2 tabular-nums">{f.cantidad.toLocaleString('es-AR')}</td>
+                  <td className="py-2 text-right tabular-nums">{f.porcentaje}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </>
+        }
+      >
+        <GraficoBarras
+          resumen={resumen}
+          maximo={Math.max(...filas.map((f) => f.cantidad), 1)}
+          color="#B26B00"
+          anchoRotulo={78}
+          filas={filas.map((f) => ({
+            nombre: estrellas(f.n),
+            valor: f.cantidad,
+            rotulo: `${f.cantidad.toLocaleString('es-AR')} (${f.porcentaje}%)`,
+            detalle: `${opiniones(f.cantidad)} con ${estrellas(f.n)}`,
+          }))}
+        />
+      </Figura>
     </div>
   )
 }
 
 function PorTema({ panorama }: { panorama: Panorama }) {
   const filas = panorama.categorias.map((c) => ({ ...c, nombre: buscarCategoria(c.id)?.nombre ?? c.id }))
+  const conDatos = filas.filter((f) => f.total > 0)
+  const ordenadas = [...conDatos].sort((a, b) => b.promedio - a.promedio)
+  const mejor = ordenadas[0]
+  const peor = ordenadas[ordenadas.length - 1]
+  const resumen =
+    mejor && peor
+      ? `Promedio de estrellas por tema. El más alto es ${mejor.nombre}, con ${formatearPromedio(mejor.promedio)}. El más bajo es ${peor.nombre}, con ${formatearPromedio(peor.promedio)}.`
+      : 'Promedio de estrellas por tema.'
+
   return (
-    <>
-      <Suspense fallback={<Esqueleto etiqueta="Cargando el gráfico" lineas={3} />}>
-        <GraficoTemas datos={filas.filter((f) => f.total > 0)} />
-      </Suspense>
-      <TablaDatos resumen="Ver los promedios por tema en una tabla">
-        <caption className="sr-only">Promedio y cantidad de opiniones por tema</caption>
-        <thead>
-          <tr className="border-b-2 border-tinta">
-            <th scope="col" className="py-2 pr-2">Tema</th>
-            <th scope="col" className="py-2 pr-2">Promedio</th>
-            <th scope="col" className="whitespace-nowrap py-2 pl-2 text-right">Opiniones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f) => (
-            <tr key={f.id} className="border-b border-piedra">
-              <th scope="row" className="py-2 pr-2 font-normal">
-                <Link to={`/categoria/${f.id}`} className="enlace">
-                  {f.nombre}
-                </Link>
-              </th>
-              <td className="py-2 pr-2">{f.total > 0 ? formatearPromedio(f.promedio) : 'Sin opiniones'}</td>
-              <td className="py-2 text-right tabular-nums">{f.total.toLocaleString('es-AR')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </TablaDatos>
-    </>
+    <Figura
+      titulo="promedio por tema"
+      tabla={
+        <>
+          <caption className="sr-only">Promedio y cantidad de opiniones por tema</caption>
+          <Encabezado columnas={['Tema', 'Promedio', 'Opiniones']} />
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.id} className="border-b border-piedra">
+                <th scope="row" className="py-2 pr-2 font-normal">
+                  <Link to={`/categoria/${f.id}`} className="enlace">
+                    {f.nombre}
+                  </Link>
+                </th>
+                <td className="py-2 pr-2">{f.total > 0 ? formatearPromedio(f.promedio) : 'Sin opiniones'}</td>
+                <td className="py-2 text-right tabular-nums">{f.total.toLocaleString('es-AR')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </>
+      }
+    >
+      <GraficoBarras
+        resumen={resumen}
+        maximo={5}
+        marcas={[0, 1, 2, 3, 4, 5]}
+        color="#17594A"
+        filas={conDatos.map((f) => ({
+          nombre: f.nombre,
+          valor: f.promedio,
+          rotulo: formatearPromedio(f.promedio),
+          detalle: `Promedio ${formatearPromedio(f.promedio)} · ${opiniones(f.total)}`,
+        }))}
+      />
+    </Figura>
   )
 }
 
 function Evolucion({ puntos }: { puntos: PuntoMensual[] }) {
-  if (puntos.every((p) => p.total === 0)) {
+  const conDatos = puntos.filter((p): p is PuntoMensual & { promedio: number } => p.promedio !== null)
+  const primero = puntos[0]
+  const ultimo = puntos[puntos.length - 1]
+  const reciente = conDatos[conDatos.length - 1]
+  if (!primero || !ultimo || !reciente) {
     return <EstadoVacio titulo="No hubo opiniones en los últimos 12 meses" />
   }
-  const datos = puntos.map((p) => ({ ...p, etiqueta: FORMATO_MES.format(fechaDelMes(p.mes)) }))
+  const largo = (mes: string) => FORMATO_MES_LARGO.format(fechaDelMes(mes))
+  const maximo = conDatos.reduce((a, b) => (b.promedio > a.promedio ? b : a))
+  const minimo = conDatos.reduce((a, b) => (b.promedio < a.promedio ? b : a))
+  const resumen = `Promedio de estrellas por mes, de ${largo(primero.mes)} a ${largo(ultimo.mes)}. Último mes con opiniones: ${largo(reciente.mes)}, con ${formatearPromedio(reciente.promedio)}. El más alto fue ${largo(maximo.mes)}, con ${formatearPromedio(maximo.promedio)}, y el más bajo ${largo(minimo.mes)}, con ${formatearPromedio(minimo.promedio)}.`
+
   return (
-    <>
-      <Suspense fallback={<Esqueleto etiqueta="Cargando el gráfico" lineas={3} />}>
-        <GraficoEvolucion datos={datos} />
-      </Suspense>
-      <TablaDatos resumen="Ver la evolución mensual en una tabla">
-        <caption className="sr-only">Promedio y cantidad de opiniones por mes</caption>
-        <thead>
-          <tr className="border-b-2 border-tinta">
-            <th scope="col" className="py-2 pr-2">Mes</th>
-            <th scope="col" className="py-2 pr-2">Promedio</th>
-            <th scope="col" className="whitespace-nowrap py-2 pl-2 text-right">Opiniones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {puntos.map((p) => (
-            <tr key={p.mes} className="border-b border-piedra">
-              <th scope="row" className="py-2 pr-2 font-normal">{FORMATO_MES_LARGO.format(fechaDelMes(p.mes))}</th>
-              <td className="py-2 pr-2">{p.promedio === null ? 'Sin opiniones' : formatearPromedio(p.promedio)}</td>
-              <td className="py-2 text-right tabular-nums">{p.total.toLocaleString('es-AR')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </TablaDatos>
-    </>
+    <Figura
+      titulo="evolución mensual"
+      tabla={
+        <>
+          <caption className="sr-only">Promedio y cantidad de opiniones por mes</caption>
+          <Encabezado columnas={['Mes', 'Promedio', 'Opiniones']} />
+          <tbody>
+            {puntos.map((p) => (
+              <tr key={p.mes} className="border-b border-piedra">
+                <th scope="row" className="py-2 pr-2 font-normal">{largo(p.mes)}</th>
+                <td className="py-2 pr-2">{p.promedio === null ? 'Sin opiniones' : formatearPromedio(p.promedio)}</td>
+                <td className="py-2 text-right tabular-nums">{p.total.toLocaleString('es-AR')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </>
+      }
+    >
+      <GraficoLinea
+        resumen={resumen}
+        minimo={1}
+        maximo={5}
+        puntos={puntos.map((p) => ({
+          etiqueta: FORMATO_MES.format(fechaDelMes(p.mes)),
+          valor: p.promedio,
+          rotulo: p.promedio === null ? '' : formatearPromedio(p.promedio),
+          detalle: p.promedio === null ? 'Sin opiniones' : `Promedio ${formatearPromedio(p.promedio)} · ${opiniones(p.total)}`,
+        }))}
+      />
+    </Figura>
   )
 }
 
@@ -148,12 +224,12 @@ function Ranking({ titulo, barrios }: { titulo: string; barrios: EstadisticaBarr
   )
 }
 
-function Barrios() {
+function Barrios({ version }: { version: number }) {
   const [categoria, setCategoria] = useState<CategoriaId>(CATEGORIAS[0].id)
-  const { datos, cargando, error, reintentar } = useAsync(`barrios:${categoria}`, () => obtenerBarrios(categoria))
+  const { datos, cargando, error, reintentar } = useAsync(`barrios:${categoria}:${version}`, () => obtenerBarrios(categoria))
 
   // Mismo criterio que el mapa: solo cuentan los barrios con suficientes opiniones
-  const conDatos = (datos ?? []).filter((b) => b.total >= MINIMO_OPINIONES)
+  const conDatos = (datos?.valor ?? []).filter((b) => b.total >= MINIMO_OPINIONES)
   const mejores = [...conDatos].sort((a, b) => b.promedio - a.promedio || b.total - a.total).slice(0, 5)
   const peores = [...conDatos]
     .filter((b) => !mejores.includes(b))
@@ -206,8 +282,16 @@ function Barrios() {
 
 export function ResultadosPage() {
   useTitulo('Resultados')
-  const panorama = useAsync('panorama', obtenerPanorama)
-  const evolucion = useAsync('evolucion', obtenerEvolucion)
+  // Al tocar "Actualizar" cambia la versión y todas las secciones vuelven a pedir sus datos
+  const [version, setVersion] = useState(0)
+  const panorama = useAsync(`panorama:${version}`, obtenerPanorama)
+  const evolucion = useAsync(`evolucion:${version}`, obtenerEvolucion)
+  const datos = panorama.datos?.valor
+
+  function actualizar() {
+    pedirDatosNuevos()
+    setVersion((v) => v + 1)
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 pt-8">
@@ -215,19 +299,23 @@ export function ResultadosPage() {
       <p className="mt-2 text-adoquin">
         Lo que opinó quien quiso participar. No es una encuesta representativa de la ciudad.
       </p>
+      {/* Alto reservado: cuando llega la fecha, el resto de la página no se mueve */}
+      <div className="min-h-[44px]">
+        {panorama.datos && <Actualizado momento={panorama.datos.actualizado} onActualizar={actualizar} />}
+      </div>
 
       {panorama.cargando && (
-        <div className="mt-8">
+        <div className="mt-4">
           <Esqueleto etiqueta="Cargando los resultados" lineas={4} />
         </div>
       )}
       {panorama.error && (
-        <div className="mt-8">
+        <div className="mt-4">
           <EstadoError mensaje={panorama.error.message} onReintentar={panorama.reintentar} />
         </div>
       )}
-      {panorama.datos && panorama.datos.general.total === 0 && (
-        <div className="mt-8">
+      {datos && datos.general.total === 0 && (
+        <div className="mt-4">
           <EstadoVacio titulo="Todavía no hay opiniones">
             <Link to="/opinar" className="enlace">
               Sé la primera persona en opinar
@@ -236,24 +324,29 @@ export function ResultadosPage() {
         </div>
       )}
 
-      {panorama.datos && panorama.datos.general.total > 0 && (
+      {datos && datos.general.total > 0 && (
         <>
-          <Seccion id="general" titulo="Promedio general">
-            <General panorama={panorama.datos} />
-          </Seccion>
+          <section aria-labelledby="general" className="mt-4">
+            <h2 id="general" className="font-display text-2xl">
+              Promedio general
+            </h2>
+            <div className="mt-4">
+              <General panorama={datos} />
+            </div>
+          </section>
 
           <Seccion id="por-tema" titulo="Promedio por tema">
-            <PorTema panorama={panorama.datos} />
+            <PorTema panorama={datos} />
           </Seccion>
 
           <Seccion id="evolucion" titulo="Evolución mensual">
             {evolucion.cargando && <Esqueleto etiqueta="Cargando la evolución" lineas={3} />}
             {evolucion.error && <EstadoError mensaje={evolucion.error.message} onReintentar={evolucion.reintentar} />}
-            {evolucion.datos && <Evolucion puntos={evolucion.datos} />}
+            {evolucion.datos && <Evolucion puntos={evolucion.datos.valor} />}
           </Seccion>
 
           <Seccion id="barrios" titulo="Barrios mejor y peor puntuados">
-            <Barrios />
+            <Barrios version={version} />
           </Seccion>
         </>
       )}

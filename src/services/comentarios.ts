@@ -1,10 +1,19 @@
 // Acceso a Firestore. Las páginas no importan este módulo: usan services/opiniones.ts.
 import { getAuth } from 'firebase/auth'
-import { addDoc, collection, serverTimestamp, type CollectionReference, type DocumentData } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  type CollectionReference,
+  type DocumentData,
+} from 'firebase/firestore'
 import type { CategoriaId } from '../data/categorias'
 import {
   consultarBarrios,
   consultarEvolucion,
+  consultarMisOpiniones,
   consultarPanorama,
   consultarRecientes,
   consultarResumen,
@@ -67,6 +76,29 @@ export function obtenerEvolucion(): Promise<PuntoMensual[]> {
 
 export function obtenerBarrios(categoria: CategoriaId): Promise<EstadisticaBarrio[]> {
   return pedir((col) => consultarBarrios(col, categoria))
+}
+
+/** Las opiniones de una cuenta. Sin conexión responde con lo que haya en la caché local de Firestore. */
+export function obtenerMisOpiniones(uid: string): Promise<Comentario[]> {
+  return pedir((col) => consultarMisOpiniones(col, uid))
+}
+
+/**
+ * Borra una opinión. Las reglas solo lo permiten a quien la escribió, y no a las viejas, que no tienen uid.
+ * Un borrado hecho sin conexión no se encola: quedaría esperando al servidor sin que la persona lo sepa.
+ */
+export async function borrarComentario(id: string): Promise<void> {
+  if (!navigator.onLine) throw new ErrorServicio('Estás sin conexión. No pudimos borrar tu opinión.', 'sin-conexion')
+  try {
+    await deleteDoc(doc(coleccion(), id))
+  } catch (error) {
+    const traducido = traducir(error)
+    // También responde esto una opinión que ya no existe (por ejemplo, borrada desde otra pestaña)
+    if (traducido.codigo === 'permission-denied') {
+      throw new ErrorServicio('No pudimos borrar esta opinión. Puede que ya no exista o que no sea tuya.', 'permission-denied')
+    }
+    throw traducido
+  }
 }
 
 /**

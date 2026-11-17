@@ -16,14 +16,15 @@ import {
 } from 'firebase/firestore'
 import { BARRIOS } from '../data/barrios'
 import { buscarCategoria, CATEGORIAS, type CategoriaId } from '../data/categorias'
-import type {
-  Calificacion,
-  Comentario,
-  EstadisticaBarrio,
-  Panorama,
-  Promedio,
-  PuntoMensual,
-  ResumenCategoria,
+import {
+  MAX_MIS_OPINIONES,
+  type Calificacion,
+  type Comentario,
+  type EstadisticaBarrio,
+  type Panorama,
+  type Promedio,
+  type PuntoMensual,
+  type ResumenCategoria,
 } from './types'
 
 type Coleccion = CollectionReference<DocumentData>
@@ -48,11 +49,10 @@ function esCalificacion(valor: unknown): valor is Calificacion {
 
 /** Los documentos viejos no tienen validación garantizada: se descarta lo que no se puede mostrar */
 export function parsearComentario(id: string, datos: DocumentData): Comentario | null {
-  const { texto, calificacion, categoria, barrio } = datos
+  const { texto, calificacion, categoria, barrio, uid } = datos
   const fecha = normalizarFecha(datos.fecha)
   const cat = buscarCategoria(typeof categoria === 'string' ? categoria : null)
   if (typeof texto !== 'string' || !esCalificacion(calificacion) || !fecha || !cat) return null
-  // `uid` queda afuera a propósito: la interfaz no lo necesita
   return {
     id,
     texto,
@@ -60,7 +60,22 @@ export function parsearComentario(id: string, datos: DocumentData): Comentario |
     fecha,
     categoria: cat.id,
     ...(typeof barrio === 'string' && barrio ? { barrio } : {}),
+    ...(typeof uid === 'string' && uid ? { uid } : {}),
   }
+}
+
+/**
+ * Las opiniones de una cuenta, de la más nueva a la más vieja. Usa el índice uid ASC + fecha DESC.
+ * Solo las nuevas tienen uid, y las reglas obligan a que su fecha sea un Timestamp del servidor, así que
+ * acá alcanza con un solo orderBy: no se mezclan los dos formatos de fecha de las opiniones viejas.
+ */
+export async function consultarMisOpiniones(
+  coleccion: Coleccion,
+  uid: string,
+  cantidad = MAX_MIS_OPINIONES,
+): Promise<Comentario[]> {
+  const resultado = await getDocs(query(coleccion, where('uid', '==', uid), orderBy('fecha', 'desc'), limit(cantidad)))
+  return resultado.docs.flatMap((d) => parsearComentario(d.id, d.data({ serverTimestamps: 'estimate' })) ?? [])
 }
 
 /**

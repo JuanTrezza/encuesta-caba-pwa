@@ -78,7 +78,11 @@ export function OpinarPage() {
     <div className="mx-auto max-w-2xl px-4 pt-8">
       <h1 className="font-display text-4xl leading-tight">Dar mi opinión</h1>
       <p className="mt-2 text-adoquin">
-        Tu comentario se publica sin tu nombre y no se puede editar después. Evitá poner datos personales.
+        Tu comentario se publica sin tu nombre y no se puede editar, pero podés borrarlo cuando quieras desde{' '}
+        <Link to="/mis-opiniones" className="enlace">
+          Mis opiniones
+        </Link>
+        . Evitá poner datos personales.
       </p>
 
       <form ref={formulario} onSubmit={enviar} noValidate className="cartel mt-6 space-y-6 p-5">

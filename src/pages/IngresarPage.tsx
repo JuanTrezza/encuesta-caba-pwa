@@ -12,7 +12,7 @@ function destinoSeguro(volver: string | null): string {
 }
 
 export function IngresarPage() {
-  const { usuario, cargando } = useAuth()
+  const { usuario, cargando } = useAuth({ urgente: true })
   const [params] = useSearchParams()
   const [modo, setModo] = useState<'ingresar' | 'registro'>('ingresar')
   const [email, setEmail] = useState('')

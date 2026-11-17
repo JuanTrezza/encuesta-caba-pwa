@@ -1,5 +1,6 @@
-// Fachada que usan las páginas: lecturas con respaldo para cuando no hay conexión, y envío con cola.
+// Fachada que usan las páginas: lecturas con caché de agregados, y envío con cola.
 import type { CategoriaId } from '../data/categorias'
+import { abrirBase, type AgregadoGuardado } from './base'
 import { agregarPendiente, listarPendientes, marcarError, migrarColaAnterior, quitarPendiente } from './cola'
 import {
   esErrorDeRed,
@@ -18,73 +19,108 @@ const api = () => import('./comentarios')
 
 // ---------- Lecturas ----------
 
-const VIGENCIA_MS = 5 * 60_000
-const PREFIJO = 'vp:respaldo:'
-const memoria = new Map<string, { momento: number; promesa: Promise<unknown> }>()
+/** Dato agregado más el momento en que lo respondió el servidor */
+export interface ConFecha<T> {
+  valor: T
+  actualizado: number
+}
 
-function leerRespaldo<T>(clave: string): T | undefined {
+const VIGENCIA_MS = 30 * 60_000
+const memoria = new Map<string, Promise<ConFecha<unknown>>>()
+/** Lo guardado antes de este momento se vuelve a pedir, aunque no haya vencido */
+let frescoDesde = 0
+
+const vigente = (momento: number) => momento >= frescoDesde && Date.now() - momento < VIGENCIA_MS
+
+async function leerGuardado(clave: string): Promise<AgregadoGuardado | undefined> {
   try {
-    const guardado = localStorage.getItem(PREFIJO + clave)
-    return guardado ? (JSON.parse(guardado) as T) : undefined
+    return await (await abrirBase()).get('agregados', clave)
   } catch {
+    // Sin IndexedDB (por ejemplo, en modo privado de algunos navegadores) se sigue sin caché
     return undefined
   }
 }
 
-function guardarRespaldo(clave: string, datos: unknown): void {
+async function guardar(agregado: AgregadoGuardado): Promise<void> {
   try {
-    localStorage.setItem(PREFIJO + clave, JSON.stringify(datos))
+    await (await abrirBase()).put('agregados', agregado)
   } catch {
-    // Sin lugar o con el almacenamiento bloqueado: se sigue sin respaldo
+    // Sin IndexedDB no se guarda
   }
 }
 
 /**
- * Los agregados solo los responde el servidor, nunca la caché de Firestore. Por eso se guardan acá:
- * en memoria unos minutos, para no repetir decenas de consultas al volver a una página, y en
- * localStorage, para mostrar el último valor conocido cuando no hay conexión.
+ * Los agregados solo los responde el servidor, nunca la caché de Firestore, y una página puede necesitar
+ * decenas. Por eso el último resultado se guarda en memoria y en IndexedDB, y vale 30 minutos: una recarga
+ * no repite las consultas. Sin conexión se muestra lo guardado aunque esté vencido.
  */
-function conRespaldo<T>(clave: string, pedir: () => Promise<T>): Promise<T> {
-  const enMemoria = memoria.get(clave)
-  if (enMemoria && Date.now() - enMemoria.momento < VIGENCIA_MS) return enMemoria.promesa as Promise<T>
+async function conCache<T>(clave: string, pedir: () => Promise<T>): Promise<ConFecha<T>> {
+  const enMemoria = await memoria.get(clave)?.catch(() => undefined)
+  if (enMemoria && vigente(enMemoria.actualizado)) return enMemoria as ConFecha<T>
 
-  const promesa = pedir().then(
-    (datos) => {
-      guardarRespaldo(clave, datos)
-      return datos
-    },
-    (error: unknown) => {
-      memoria.delete(clave)
-      if (esErrorDeRed(error)) {
-        const respaldo = leerRespaldo<T>(clave)
-        if (respaldo !== undefined) return respaldo
-      }
+  const promesa = (async (): Promise<ConFecha<T>> => {
+    const guardado = await leerGuardado(clave)
+    if (guardado && vigente(guardado.momento)) return { valor: guardado.valor as T, actualizado: guardado.momento }
+    try {
+      const valor = await pedir()
+      const actualizado = Date.now()
+      void guardar({ clave, valor, momento: actualizado })
+      return { valor, actualizado }
+    } catch (error) {
+      if (guardado && esErrorDeRed(error)) return { valor: guardado.valor as T, actualizado: guardado.momento }
       throw error
-    },
-  )
-  memoria.set(clave, { momento: Date.now(), promesa })
+    }
+  })()
+  memoria.set(clave, promesa)
+  promesa.catch(() => memoria.delete(clave))
   return promesa
 }
 
-export function obtenerResumen(categoria: CategoriaId): Promise<ResumenCategoria> {
-  return conRespaldo(`resumen:${categoria}`, async () => (await api()).obtenerResumen(categoria))
+/** Hace que la próxima lectura vaya al servidor. Lo guardado queda como respaldo para cuando no hay conexión. */
+export function pedirDatosNuevos(): void {
+  frescoDesde = Date.now()
+  memoria.clear()
 }
 
-/** No pasa por el respaldo: sin conexión, Firestore responde con su propia caché */
+// Limpieza del respaldo que la versión anterior dejaba en localStorage
+try {
+  Object.keys(localStorage)
+    .filter((clave) => clave.startsWith('vp:respaldo:'))
+    .forEach((clave) => localStorage.removeItem(clave))
+} catch {
+  // Almacenamiento bloqueado: no hay nada que limpiar
+}
+
+export function obtenerResumen(categoria: CategoriaId): Promise<ConFecha<ResumenCategoria>> {
+  return conCache(`resumen:${categoria}`, async () => (await api()).obtenerResumen(categoria))
+}
+
+/** No pasa por esta caché: sin conexión, Firestore responde con la suya */
 export async function obtenerRecientes(categoria: CategoriaId): Promise<Comentario[]> {
   return (await api()).obtenerRecientes(categoria)
 }
 
-export function obtenerPanorama(): Promise<Panorama> {
-  return conRespaldo('panorama', async () => (await api()).obtenerPanorama())
+/** No pasa por la caché de agregados: es una lista propia y tiene que estar al día. Sin conexión, la caché de Firestore. */
+export async function obtenerMisOpiniones(uid: string): Promise<Comentario[]> {
+  return (await api()).obtenerMisOpiniones(uid)
 }
 
-export function obtenerEvolucion(): Promise<PuntoMensual[]> {
-  return conRespaldo('evolucion', async () => (await api()).obtenerEvolucion())
+/** Borra una opinión propia. Los promedios y conteos guardados dejan de valer, así que se vuelven a pedir. */
+export async function borrarOpinion(id: string): Promise<void> {
+  await (await api()).borrarComentario(id)
+  pedirDatosNuevos()
 }
 
-export function obtenerBarrios(categoria: CategoriaId): Promise<EstadisticaBarrio[]> {
-  return conRespaldo(`barrios:${categoria}`, async () => (await api()).obtenerBarrios(categoria))
+export function obtenerPanorama(): Promise<ConFecha<Panorama>> {
+  return conCache('panorama', async () => (await api()).obtenerPanorama())
+}
+
+export function obtenerEvolucion(): Promise<ConFecha<PuntoMensual[]>> {
+  return conCache('evolucion', async () => (await api()).obtenerEvolucion())
+}
+
+export function obtenerBarrios(categoria: CategoriaId): Promise<ConFecha<EstadisticaBarrio[]>> {
+  return conCache(`barrios:${categoria}`, async () => (await api()).obtenerBarrios(categoria))
 }
 
 // ---------- Envío y cola ----------
@@ -119,7 +155,7 @@ export async function enviarOpinion(nuevo: NuevoComentario, uid: string): Promis
   if (navigator.onLine) {
     try {
       await (await api()).publicarComentario(nuevo)
-      memoria.clear()
+      pedirDatosNuevos()
       return 'enviada'
     } catch (error) {
       if (!esErrorDeRed(error)) throw error
@@ -144,7 +180,7 @@ export async function sincronizarCola(uid: string): Promise<void> {
         await (await api()).publicarComentario({ texto, calificacion, categoria, ...(barrio ? { barrio } : {}) })
         await quitarPendiente(pendiente.id)
         enviadas += 1
-        memoria.clear()
+        pedirDatosNuevos()
       } catch (error) {
         if (esErrorDeRed(error)) break
         // Rechazo definitivo (por ejemplo, de las reglas): queda a la vista para descartarla

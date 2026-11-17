@@ -1,25 +1,11 @@
 // Cola de opiniones escritas sin conexión. Vive en IndexedDB, así sobrevive a cerrar la app.
-import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { deleteDB, openDB } from 'idb'
 import { BARRIOS } from '../data/barrios'
 import { buscarCategoria } from '../data/categorias'
+import { abrirBase as abrir } from './base'
 import { MAX_COMENTARIO, type Calificacion, type OpinionPendiente } from './types'
 
-interface Esquema extends DBSchema {
-  pendientes: { key: number; value: OpinionPendiente }
-}
-
 const BASE_ANTERIOR = 'EncuestasCABA'
-
-let base: Promise<IDBPDatabase<Esquema>> | undefined
-
-function abrir(): Promise<IDBPDatabase<Esquema>> {
-  base ??= openDB<Esquema>('voz-portena', 1, {
-    upgrade(db) {
-      db.createObjectStore('pendientes', { keyPath: 'id', autoIncrement: true })
-    },
-  })
-  return base
-}
 
 export async function agregarPendiente(opinion: Omit<OpinionPendiente, 'id'>): Promise<void> {
   // El id lo asigna IndexedDB

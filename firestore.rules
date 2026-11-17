@@ -42,7 +42,12 @@ service cloud.firestore {
     match /comentarios/{comentarioId} {
       allow read: if true;
       allow create: if request.auth != null && opinionValida();
-      allow update, delete: if false;
+      // Editar sigue prohibido. Cada persona puede borrar solo lo suyo; las opiniones viejas, que
+      // no tienen uid, no las puede borrar nadie desde la app.
+      allow update: if false;
+      allow delete: if request.auth != null
+        && 'uid' in resource.data
+        && resource.data.uid == request.auth.uid;
     }
 
     // Todo lo demás queda cerrado

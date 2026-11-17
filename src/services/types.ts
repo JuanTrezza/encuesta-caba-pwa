@@ -5,6 +5,9 @@ export const MAX_COMENTARIO = 500
 /** Con menos opiniones que estas, un barrio figura como "sin datos" en el mapa y en los rankings */
 export const MINIMO_OPINIONES = 3
 
+/** Cuántas opiniones propias trae "Mis opiniones". Si hay más, se muestran las más nuevas. */
+export const MAX_MIS_OPINIONES = 100
+
 export type Calificacion = 1 | 2 | 3 | 4 | 5
 
 export interface Usuario {
@@ -23,6 +26,11 @@ export interface Comentario {
   categoria: CategoriaId
   /** Campo nuevo y opcional: los documentos viejos no lo tienen */
   barrio?: string
+  /**
+   * Código de la cuenta que la escribió. Las opiniones viejas no lo tienen, y por eso no se pueden borrar
+   * desde la app. Es público en Firestore: la interfaz solo lo compara con el de la sesión.
+   */
+  uid?: string
 }
 
 export interface NuevoComentario {

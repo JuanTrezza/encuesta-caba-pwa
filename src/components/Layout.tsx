@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { cerrarSesion } from '../services/auth'
 import { Adoquines, Franjas } from './Adornos'
 import { AvisosPwa } from './AvisosPwa'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -15,35 +14,119 @@ const ENLACES = [
   { to: '/sobre', texto: 'Sobre el proyecto' },
 ]
 
-function Sesion({ enPanel = false }: { enPanel?: boolean }) {
-  const { usuario, cargando } = useAuth()
+function useSalir() {
   const [saliendo, setSaliendo] = useState(false)
-  const ancho = enPanel ? 'w-full' : ''
-
-  if (cargando) return <span className="w-[4.5rem]" aria-hidden="true" />
-  if (!usuario) {
-    return (
-      <Link to="/ingresar" className={`boton-primario whitespace-nowrap ${ancho}`}>
-        Ingresar
-      </Link>
-    )
-  }
 
   async function salir() {
+    if (saliendo) return
     setSaliendo(true)
     try {
-      await cerrarSesion()
+      await (await import('../services/auth')).cerrarSesion()
     } finally {
       setSaliendo(false)
     }
   }
 
+  return { salir, saliendo }
+}
+
+const IR_A_INGRESAR = 'boton-primario whitespace-nowrap'
+
+/**
+ * Menú de la cuenta en la barra de escritorio: un botón que abre un panel con "Mis opiniones" y "Salir".
+ * Se cierra con Escape, al tocar afuera, al llevar el foco afuera con Tab o al cambiar de página.
+ */
+function MenuCuenta({ nombre }: { nombre: string }) {
+  const [abierto, setAbierto] = useState(false)
+  const contenedor = useRef<HTMLDivElement>(null)
+  const boton = useRef<HTMLButtonElement>(null)
+  const { pathname, search } = useLocation()
+  const { salir, saliendo } = useSalir()
+
+  useEffect(() => setAbierto(false), [pathname, search])
+
+  useEffect(() => {
+    if (!abierto) return
+    function alEstarAfuera(evento: Event) {
+      if (!contenedor.current?.contains(evento.target as Node)) setAbierto(false)
+    }
+    // No se usa onBlur: en Safari tocar un botón no le da el foco y el menú se cerraría antes del clic
+    document.addEventListener('pointerdown', alEstarAfuera)
+    document.addEventListener('focusin', alEstarAfuera)
+    return () => {
+      document.removeEventListener('pointerdown', alEstarAfuera)
+      document.removeEventListener('focusin', alEstarAfuera)
+    }
+  }, [abierto])
+
   return (
-    <div className={enPanel ? 'space-y-3' : 'flex items-center gap-3'}>
-      <span className={`truncate text-sm text-adoquin ${enPanel ? 'block' : 'hidden max-w-[14rem] lg:inline'}`}>
-        {usuario.nombre ?? usuario.email}
-      </span>
-      <button type="button" onClick={salir} disabled={saliendo} className={`boton-borde whitespace-nowrap ${ancho}`}>
+    <div
+      ref={contenedor}
+      className="relative"
+      onKeyDown={(evento) => {
+        if (evento.key === 'Escape' && abierto) {
+          setAbierto(false)
+          boton.current?.focus()
+        }
+      }}
+    >
+      <button
+        ref={boton}
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
+        aria-controls="menu-cuenta"
+        className="boton-borde whitespace-nowrap"
+      >
+        Mi cuenta
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {abierto && (
+        <div id="menu-cuenta" className="absolute right-0 top-full z-20 mt-2 w-64 rounded-md border-2 border-tinta bg-papel p-3 shadow-lg">
+          <p className="truncate text-sm text-adoquin">{nombre}</p>
+          <Link to="/mis-opiniones" className="mt-1 flex min-h-[44px] items-center font-bold underline-offset-4 hover:underline">
+            Mis opiniones
+          </Link>
+          <button type="button" onClick={salir} aria-disabled={saliendo} className="boton-borde mt-1 w-full">
+            Salir
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Sesion() {
+  const { usuario } = useAuth()
+  // Mientras no se sabe si hay sesión se muestra "Ingresar": es el caso más común y evita un hueco
+  if (!usuario) {
+    return (
+      <Link to="/ingresar" className={IR_A_INGRESAR}>
+        Ingresar
+      </Link>
+    )
+  }
+  return <MenuCuenta nombre={usuario.nombre ?? usuario.email ?? ''} />
+}
+
+/** La misma sesión, dentro del panel de pantallas angostas */
+function SesionEnPanel() {
+  const { usuario } = useAuth()
+  const { salir, saliendo } = useSalir()
+
+  if (!usuario) {
+    return (
+      <Link to="/ingresar" className={`${IR_A_INGRESAR} w-full`}>
+        Ingresar
+      </Link>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      <p className="truncate text-sm text-adoquin">{usuario.nombre ?? usuario.email}</p>
+      <button type="button" onClick={salir} aria-disabled={saliendo} className="boton-borde w-full whitespace-nowrap">
         Salir
       </button>
     </div>
@@ -56,6 +139,12 @@ function MenuMovil() {
   const boton = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const { pathname, search } = useLocation()
+  const { usuario } = useAuth()
+  const enlaces = [
+    { to: '/', texto: 'Inicio' },
+    ...ENLACES,
+    ...(usuario ? [{ to: '/mis-opiniones', texto: 'Mis opiniones' }] : []),
+  ]
 
   useEffect(() => setAbierto(false), [pathname, search])
 
@@ -139,7 +228,7 @@ function MenuMovil() {
               </svg>
             </button>
             <nav aria-label="Principal" className="mt-2 flex flex-col">
-              {[{ to: '/', texto: 'Inicio' }, ...ENLACES].map(({ to, texto }) => (
+              {enlaces.map(({ to, texto }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -153,7 +242,7 @@ function MenuMovil() {
               ))}
             </nav>
             <div className="mt-6">
-              <Sesion enPanel />
+              <SesionEnPanel />
             </div>
           </div>
         </div>
